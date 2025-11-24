@@ -1,0 +1,9 @@
+frontend:
+  build: ./frontend
+  container_name: netflix-frontend
+  ports:
+    - "8501:8501"
+  depends_on:
+    - postgres
+  networks:
+    - devops-net
