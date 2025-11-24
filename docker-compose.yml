@@ -1,9 +1,16 @@
-frontend:
-  build: ./frontend
-  container_name: netflix-frontend
-  ports:
-    - "8501:8501"
-  depends_on:
-    - postgres
-  networks:
-    - devops-net
+version: "3.9"
+
+services:
+  frontend:
+    build: ./frontend
+    container_name: netflix-frontend
+    environment:
+      - ENVIRONMENT=Testing
+    ports:
+      - "8501:8501"
+    networks:
+      - devops-net
+
+networks:
+  devops-net:
+    driver: bridge
