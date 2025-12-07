@@ -1,157 +1,112 @@
 import streamlit as st
-import pandas as pd
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import random
 import time
-import subprocess
+import requests
 import os
 
-ENVIRONMENT = os.getenv("ENVIRONMENT", "Testing")
+# Configuration
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
 
-# ========================
-#  DB Connection Function
-# ========================
-def get_connection():
-    return psycopg2.connect(
-        host="postgres",
-        database="netflix",
-        user="postgres",
-        password="postgres",
-        cursor_factory=RealDictCursor
-    )
+# Available regions
+REGIONS = ["US", "IN", "UK", "DE", "CA", "FR", "JP", "AU", "BR", "MX"]
 
-# ========================
-#  Fetch Aggregated Data
-# ========================
-def fetch_unique_users():
-    if ENVIRONMENT == "Testing":
-        return pd.DataFrame({
-            "window_start": pd.date_range(start="2023-01-01", periods=50, freq="10S"),
-            "unique_users": range(1, 51)
-        })
-
-    query = """
-    SELECT window_start, unique_users
-    FROM mv_unique_users_10s
-    ORDER BY window_start DESC
-    LIMIT 50;
-    """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(query)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return pd.DataFrame(rows)
-
-# ========================
-#  Fetch Region & Device Insights
-# ========================
-def fetch_region_insights():
-    if ENVIRONMENT == "Testing":
-        return pd.DataFrame({
-            "region": ["US", "CA", "MX", "BR", "AR"],
-            "logins": [10, 20, 30, 40, 50]
-        })
-    query = """
-    SELECT region, COUNT(*) AS logins
-    FROM user_login_events
-    GROUP BY region ORDER BY logins DESC;
-    """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(query)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return pd.DataFrame(rows)
-
-def fetch_device_insights():
-    if ENVIRONMENT == "Testing":
-        return pd.DataFrame({
-            "device": ["Desktop", "Mobile", "Tablet", "TV", "Other"],
-            "logins": [10, 20, 30, 40, 50]
-        })
-    query = """
-    SELECT device, COUNT(*) AS logins
-    FROM user_login_events
-    GROUP BY device ORDER BY logins DESC;
-    """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(query)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return pd.DataFrame(rows)
-
-# ========================
-# Call Producer Script
-# ========================
-def call_producer(rate, duration):
-    producer_path = os.path.join("..", "data_generator", "producer.py")
-
-    # In Docker/K8s, producer will be a container call
-    if ENVIRONMENT == "Testing":
-        st.info(f"Pretending to generate data ({rate} eps, {duration}s)...")
-        time.sleep(2)
-        return "TEST MODE: Simulated producer call"
-
-    # Actual execution (local or container-based)
+def send_login_event(username: str, region: str, status: str):
+    """Send login event to backend service"""
     try:
-        out = subprocess.check_output(
-            ["python", producer_path, "--rate", str(rate), "--duration", str(duration)],
-            stderr=subprocess.STDOUT,
-            text=True
+        payload = {
+            "username": username,
+            "region": region,
+            "status": status
+        }
+        response = requests.post(
+            f"{BACKEND_URL}/api/login-event",
+            json=payload,
+            timeout=5
         )
-        return out
-    except Exception as e:
-        return f"❌ Failed to run producer: {e}"
+        return response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        st.warning(f"Failed to send login event: {e}")
+        return False
 
-# ========================
-#  STREAMLIT UI
-# ========================
-st.set_page_config(page_title="Netflix Analytics", layout="wide")
+def login_page():
+    """Display the login page"""
+    st.title("🔐 Login")
+    st.markdown("---")
+    
+    with st.form("login_form"):
+        username = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        region = st.selectbox("Select Region", options=REGIONS, index=0)
+        
+        submitted = st.form_submit_button("Login", use_container_width=True)
+        
+        if submitted:
+            if not username or not password:
+                st.error("Please enter both username and password")
+            else:
+                # Determine login success with 70% probability
+                login_success = random.random() < 0.7
+                status = "success" if login_success else "failed"
+                
+                # Send login event to backend
+                send_login_event(username, region, status)
+                
+                # Store result in session state
+                st.session_state.logged_in = login_success
+                st.session_state.username = username
+                st.session_state.region = region
+                st.rerun()
 
-st.title("📊 Netflix Login Analytics (Batch + Kafka + PostgreSQL)")
-st.write("Generate data → Kafka → PostgreSQL → Query & Visualize")
+def success_page():
+    """Display the login success page"""
+    st.title("✅ Login Successful!")
+    st.markdown("---")
+    st.success(f"Welcome, **{st.session_state.username}**!")
+    st.info(f"You are logged in from region: **{st.session_state.region}**")
+    
+    st.balloons()
+    
+    if st.button("Logout", use_container_width=True):
+        st.session_state.logged_in = None
+        st.session_state.username = None
+        st.session_state.region = None
+        st.rerun()
 
-# ========== Data Generator Controls ==========
-st.sidebar.header("⚙ Data Generation Controls")
+def failure_page():
+    """Display the login failure page"""
+    st.title("❌ Login Failed")
+    st.markdown("---")
+    st.error("Invalid credentials. Please try again.")
+    st.warning(f"Attempted login from region: **{st.session_state.region}**")
+    
+    if st.button("Try Again", use_container_width=True):
+        st.session_state.logged_in = None
+        st.session_state.username = None
+        st.session_state.region = None
+        st.rerun()
 
-rate = st.sidebar.number_input("Throughput (events/sec)", min_value=1, max_value=5000, value=50)
-duration = st.sidebar.number_input("Generate Duration (seconds)", min_value=1, max_value=600, value=10)
+def main():
+    st.set_page_config(
+        page_title="Login Portal",
+        page_icon="🔐",
+        layout="centered"
+    )
+    
+    # Initialize session state
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = None
+    if "username" not in st.session_state:
+        st.session_state.username = None
+    if "region" not in st.session_state:
+        st.session_state.region = None
+    
+    # Route to appropriate page
+    if st.session_state.logged_in is None:
+        login_page()
+    elif st.session_state.logged_in:
+        success_page()
+    else:
+        failure_page()
 
-if st.sidebar.button("🚀 Generate Data"):
-    output = call_producer(rate, duration)
-    st.sidebar.success(f"Triggered Data Generation:\n{output}")
-
-# ========== Charts ==========
-refresh_rate = st.sidebar.slider("Refresh Dashboard Every (seconds):", 5, 60, 10)
-
-st.subheader("👥 Unique Active Users (Last 50 Windows)")
-data = fetch_unique_users()
-
-if data.empty:
-    st.warning("No data yet from Kafka Consumer. Waiting for events...")
-else:
-    data = data.sort_values("window_start")
-    st.line_chart(data.set_index("window_start"))
-
-# ========== Region Breakdown ==========
-st.subheader("🌍 Login Distribution by Region")
-region_df = fetch_region_insights()
-col1, col2 = st.columns(2)
-with col1:
-    st.bar_chart(region_df.set_index("region"))
-
-# ========== Device Breakdown ==========
-device_df = fetch_device_insights()
-with col2:
-    st.bar_chart(device_df.set_index("device"))
-
-st.write("⚙ Backend processor consumes Kafka events → Writes to PostgreSQL → This Dashboard reads results.")
-
-# Auto refresh
-time.sleep(refresh_rate)
-st.experimental_rerun()
+if __name__ == "__main__":
+    main()
