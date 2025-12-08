@@ -28,6 +28,26 @@ services:
     networks:
       - devops-net
 
+  db-init:
+    build: ./backend
+    container_name: netflix-db-init
+    command: python db_init.py
+    environment:
+
+
+
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=logindata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - devops-net
+
   consumer:
     build: ./backend
     container_name: netflix-consumer
@@ -42,23 +62,8 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=pwd
     depends_on:
-      - kafka
-      - postgres
-      - db-init
-    networks:
-      - devops-net
-
-  db-init:
-    build: ./backend
-    container_name: netflix-db-init
-    command: python db_init.py
-    environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=logindata
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=pwd
-    depends_on:
+      kafka:
+        condition: service_started
       postgres:
         condition: service_healthy
     networks:
@@ -72,7 +77,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pwd
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -106,6 +111,28 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     networks:
       - devops-net
+
+  test_runner:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    container_name: netflix-test-runner
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=logindata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      consumer:
+        condition: service_started
+    networks:
+      - devops-net
+
 
 volumes:
   postgres_data:
