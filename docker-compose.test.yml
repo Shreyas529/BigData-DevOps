@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_DB: logindata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pwd
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d logindata"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - devops-net
+
+  test_runner:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    container_name: netflix-test-runner
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=logindata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - devops-net
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+
+networks:
+  devops-net:
+    driver: bridge

@@ -194,10 +194,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # kafka:
-      #   condition: service_started
-      # consumer:
-      #   condition: service_started
     networks:
       - devops-net
 

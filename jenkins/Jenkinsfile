@@ -2,8 +2,10 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_REGISTRY = 'docker.io/vvj23'
-        COMPOSE_PROJECT_NAME = "netflix${BUILD_NUMBER}"
+        DOCKER_HUB_CREDENTIALS = 'dockerhub-credentials'
+        IMAGE_NAME = 'siddharth194/bigdata-devops'
+        BACKEND_TAG = 'backend'
+        FRONTEND_TAG = 'frontend'
     }
     
     stages {
@@ -11,33 +13,24 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        # Stop and remove ALL backend/consumer containers from any build
-                        docker ps -aq --filter "name=backend-" | xargs -r docker stop 2>/dev/null || true
-                        docker ps -aq --filter "name=backend-" | xargs -r docker rm 2>/dev/null || true
-                        docker ps -aq --filter "name=consumer-" | xargs -r docker stop 2>/dev/null || true
-                        docker ps -aq --filter "name=consumer-" | xargs -r docker rm 2>/dev/null || true
-                        
-                        # Stop any container using port 5002
-                        docker ps --filter "publish=5002" -q | xargs -r docker stop 2>/dev/null || true
-                        docker ps -a --filter "publish=5002" -q | xargs -r docker rm 2>/dev/null || true
-                        
-                        # Remove common infrastructure containers
-                        docker stop postgres zookeeper kafka 2>/dev/null || true
-                        docker rm postgres zookeeper kafka 2>/dev/null || true
-                        
-                        # Stop ALL netflix compose projects
-                        for project in $(docker ps -a --format '{{.Names}}' | grep -E '^netflix[0-9]+' | sed 's/-.*$//' | sort -u); do
-                            docker-compose -p $project down -v 2>/dev/null || true
-                        done
-                        
-                        # Remove current project if exists
-                        docker-compose -p ${COMPOSE_PROJECT_NAME} down -v 2>/dev/null || true
-                        
-                        # Prune unused networks and volumes
-                        docker network prune -f 2>/dev/null || true
-                        docker volume prune -f 2>/dev/null || true
-                        
-                        echo "Cleanup complete!"
+                        # stop compose project and prune system state
+                        docker compose -p test down -v || true
+                        docker system prune -af || true
+
+                        echo "Removing old images for ${IMAGE_NAME} (frontend/backed tags)..."
+
+                        # Remove previous frontend images: ${IMAGE_NAME}:frontend-*
+                        docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+                          | awk -v repo="${IMAGE_NAME}" -v prefix="${FRONTEND_TAG}-" '$1 ~ (repo ":" prefix) {print $2}' \
+                          | xargs -r docker rmi -f || true
+
+                        # Remove previous backend images: ${IMAGE_NAME}:backend-*
+                        docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+                          | awk -v repo="${IMAGE_NAME}" -v prefix="${BACKEND_TAG}-" '$1 ~ (repo ":" prefix) {print $2}' \
+                          | xargs -r docker rmi -f || true
+
+                        # Cleanup any dangling images
+                        docker image prune -f || true
                     '''
                 }
             }
@@ -50,144 +43,183 @@ pipeline {
                     credentialsId: 'github-credentials'
             }
         }
-        
-        stage('Build Images') {
-            steps {
-                script {
-                    sh '''
-                        docker build -t netflix-frontend:${BUILD_NUMBER} ./frontend
-                        docker build -t netflix-backend:${BUILD_NUMBER} ./backend
-                        docker build -f tests/Dockerfile -t netflix-tests:${BUILD_NUMBER} .
-                    '''
-                }
-            }
-        }
-        
-        stage('Start Test Infrastructure') {
-            steps {
-                script {
-                    sh '''
-                        # Start services with project-specific names
-                        docker-compose -p ${COMPOSE_PROJECT_NAME} up -d postgres zookeeper kafka
-                        
-                        # Get the actual postgres container name
-                        POSTGRES_CONTAINER=$(docker-compose -p ${COMPOSE_PROJECT_NAME} ps -q postgres)
-                        echo "PostgreSQL container ID: ${POSTGRES_CONTAINER}"
-                        
-                        # Wait for PostgreSQL using container ID
-                        echo "Waiting for PostgreSQL..."
-                        timeout 60 bash -c "until docker exec ${POSTGRES_CONTAINER} pg_isready -U postgres; do sleep 2; done"
-                        
-                        # Wait for Kafka
-                        echo "Waiting for Kafka..."
-                        sleep 15
-                    '''
-                }
-            }
-        }
-        
-        stage('Initialize Database') {
-            steps {
-                script {
-                    // Use service name 'postgres' which works within docker network
-                    sh '''
-                        docker run --rm \
-                            --network ${COMPOSE_PROJECT_NAME}_devops-net \
-                            -e POSTGRES_HOST=postgres \
-                            -e POSTGRES_PORT=5432 \
-                            -e POSTGRES_DB=logindata \
-                            -e POSTGRES_USER=postgres \
-                            -e POSTGRES_PASSWORD=pwd \
-                            netflix-backend:${BUILD_NUMBER} \
-                            python db_init.py
-                    '''
-                }
-            }
-        }
-        
+
         stage('Run Tests') {
             steps {
                 script {
-                    // Use service name 'postgres' which works within docker network
                     sh '''
-                        docker run --rm \
-                            --network ${COMPOSE_PROJECT_NAME}_devops-net \
-                            -e POSTGRES_HOST=postgres \
-                            -e POSTGRES_PORT=5432 \
-                            -e POSTGRES_DB=logindata \
-                            -e POSTGRES_USER=postgres \
-                            -e POSTGRES_PASSWORD=pwd \
-                            netflix-tests:${BUILD_NUMBER}
+                        docker compose -f docker-compose.test.yml \
+                            --project-name test \
+                            up --build --abort-on-container-exit --exit-code-from test_runner
                     '''
                 }
             }
         }
-        
-        stage('Integration Test') {
+
+        stage('Build Images') {
             steps {
                 script {
-                    // Use service names 'kafka' and 'postgres' which work within docker network
-                    sh '''
-                        # Start backend with unique name
-                        docker run -d --name backend-${BUILD_NUMBER} \
-                            --network ${COMPOSE_PROJECT_NAME}_devops-net \
-                            -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
-                            -e KAFKA_TOPIC=login_events \
-                            -e BACKEND_PORT=5002 \
-                            -p 5002:5002 \
-                            netflix-backend:${BUILD_NUMBER}
-                        
-                        # Start consumer with unique name
-                        docker run -d --name consumer-${BUILD_NUMBER} \
-                            --network ${COMPOSE_PROJECT_NAME}_devops-net \
-                            -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
-                            -e KAFKA_TOPIC=login_events \
-                            -e KAFKA_GROUP_ID=login_consumer_group \
-                            -e POSTGRES_HOST=postgres \
-                            -e POSTGRES_PORT=5432 \
-                            -e POSTGRES_DB=logindata \
-                            -e POSTGRES_USER=postgres \
-                            -e POSTGRES_PASSWORD=pwd \
-                            netflix-backend:${BUILD_NUMBER} \
-                            python consumer.py
-                        
-                        # Wait for services to be ready
-                        sleep 10
-                        
-                        # Test backend health
-                        curl -f http://localhost:5002/health || exit 1
-                        
-                        # Verify Kafka connection
-                        docker logs backend-${BUILD_NUMBER} | grep -i "kafka" || true
-                    '''
+                    sh """
+                        echo "Building Frontend Image..."
+                        docker build -t ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER} ./frontend
+
+                        echo "Building Backend Image..."
+                        docker build -t ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER} ./backend
+                    """
+                }
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: DOCKER_HUB_CREDENTIALS,
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+
+                        sh """
+                            echo "Pushing Frontend Image..."
+                            docker push ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}
+
+                            echo "Pushing Backend Image..."
+                            docker push ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}
+
+                            docker logout
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Pull Images from DockerHub') {
+            steps {
+                script {
+                    sh """
+                        docker pull ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}
+                        docker pull ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}
+                    """
                 }
             }
         }
     }
+        
+    //     stage('Start Test Infrastructure') {
+    //         steps {
+    //             script {
+    //                 sh '''
+    //                     # Start services with project-specific names
+    //                     docker-compose -p ${COMPOSE_PROJECT_NAME} up -d postgres zookeeper kafka
+                        
+    //                     # Get the actual postgres container name
+    //                     POSTGRES_CONTAINER=$(docker-compose -p ${COMPOSE_PROJECT_NAME} ps -q postgres)
+    //                     echo "PostgreSQL container ID: ${POSTGRES_CONTAINER}"
+                        
+    //                     # Wait for PostgreSQL using container ID
+    //                     echo "Waiting for PostgreSQL..."
+    //                     timeout 60 bash -c "until docker exec ${POSTGRES_CONTAINER} pg_isready -U postgres; do sleep 2; done"
+                        
+    //                     # Wait for Kafka
+    //                     echo "Waiting for Kafka..."
+    //                     sleep 15
+    //                 '''
+    //             }
+    //         }
+    //     }
+        
+    //     stage('Initialize Database') {
+    //         steps {
+    //             script {
+    //                 // Use service name 'postgres' which works within docker network
+    //                 sh '''
+    //                     docker run --rm \
+    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
+    //                         -e POSTGRES_HOST=postgres \
+    //                         -e POSTGRES_PORT=5432 \
+    //                         -e POSTGRES_DB=logindata \
+    //                         -e POSTGRES_USER=postgres \
+    //                         -e POSTGRES_PASSWORD=pwd \
+    //                         netflix-backend:${BUILD_NUMBER} \
+    //                         python db_init.py
+    //                 '''
+    //             }
+    //         }
+    //     }
+        
+    //     stage('Run Tests') {
+    //         steps {
+    //             script {
+    //                 // Use service name 'postgres' which works within docker network
+    //                 sh '''
+    //                     docker run --rm \
+    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
+    //                         -e POSTGRES_HOST=postgres \
+    //                         -e POSTGRES_PORT=5432 \
+    //                         -e POSTGRES_DB=logindata \
+    //                         -e POSTGRES_USER=postgres \
+    //                         -e POSTGRES_PASSWORD=pwd \
+    //                         netflix-tests:${BUILD_NUMBER}
+    //                 '''
+    //             }
+    //         }
+    //     }
+        
+    //     stage('Integration Test') {
+    //         steps {
+    //             script {
+    //                 // Use service names 'kafka' and 'postgres' which work within docker network
+    //                 sh '''
+    //                     # Start backend with unique name
+    //                     docker run -d --name backend-${BUILD_NUMBER} \
+    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
+    //                         -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+    //                         -e KAFKA_TOPIC=login_events \
+    //                         -e BACKEND_PORT=5002 \
+    //                         -p 5002:5002 \
+    //                         netflix-backend:${BUILD_NUMBER}
+                        
+    //                     # Start consumer with unique name
+    //                     docker run -d --name consumer-${BUILD_NUMBER} \
+    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
+    //                         -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+    //                         -e KAFKA_TOPIC=login_events \
+    //                         -e KAFKA_GROUP_ID=login_consumer_group \
+    //                         -e POSTGRES_HOST=postgres \
+    //                         -e POSTGRES_PORT=5432 \
+    //                         -e POSTGRES_DB=logindata \
+    //                         -e POSTGRES_USER=postgres \
+    //                         -e POSTGRES_PASSWORD=pwd \
+    //                         netflix-backend:${BUILD_NUMBER} \
+    //                         python consumer.py
+                        
+    //                     # Wait for services to be ready
+    //                     sleep 10
+                        
+    //                     # Test backend health
+    //                     curl -f http://localhost:5002/health || exit 1
+                        
+    //                     # Verify Kafka connection
+    //                     docker logs backend-${BUILD_NUMBER} | grep -i "kafka" || true
+    //                 '''
+    //             }
+    //         }
+    //     }
+    // }
     
     post {
         always {
             script {
                 sh '''
-                    # Stop and remove test containers
-                    docker stop backend-${BUILD_NUMBER} consumer-${BUILD_NUMBER} 2>/dev/null || true
-                    docker rm backend-${BUILD_NUMBER} consumer-${BUILD_NUMBER} 2>/dev/null || true
-                    
-                    # Stop docker-compose services with project name
-                    docker-compose -p ${COMPOSE_PROJECT_NAME} down -v 2>/dev/null || true
-                    
-                    # Clean up images
-                    docker rmi netflix-frontend:${BUILD_NUMBER} 2>/dev/null || true
-                    docker rmi netflix-backend:${BUILD_NUMBER} 2>/dev/null || true
-                    docker rmi netflix-tests:${BUILD_NUMBER} 2>/dev/null || true
+                    docker compose -p test down -v || true
                 '''
             }
         }
         success {
-            echo '✅ All tests passed successfully!'
+            echo 'All tests passed successfully!'
         }
         failure {
-            echo '❌ Tests failed!'
+            echo 'Tests failed!'
         }
     }
 }
