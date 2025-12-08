@@ -6,11 +6,14 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from kafka import KafkaProducer
 from dotenv import load_dotenv
+from elk_logger import setup_logging
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+logger = setup_logging(service_name='backend')
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
@@ -52,6 +55,9 @@ def generate_login_event(username: str, region: str, status: str) -> dict:
     - status: from login result
     - event_time: current timestamp in milliseconds
     """
+
+    logger.info(f"Generating login event for user: {username}")
+
     return {
         "user_id": username,
         "country": region,
@@ -61,20 +67,19 @@ def generate_login_event(username: str, region: str, status: str) -> dict:
         "event_time": int(time.time() * 1000)  # Current time in milliseconds
     }
 
-def push_to_kafka(event: dict) -> bool:
-    """Push event to Kafka topic"""
-    kafka_producer = get_kafka_producer()
-    if kafka_producer is None:
-        return False
-    
+def push_to_kafka(event):
     try:
-        future = kafka_producer.send(KAFKA_TOPIC, value=event)
-        # Wait for the message to be delivered
-        record_metadata = future.get(timeout=10)
-        print(f"Event sent to {record_metadata.topic} partition {record_metadata.partition}")
-        return True
+        prod = get_kafka_producer()
+        if prod:
+            future = prod.send(KAFKA_TOPIC, value=event)
+            future.get(timeout=5)
+            logger.info(f"Event sent to Kafka: {event['username']}")  # NEW LOG
+            return True
+        else:
+            logger.warning("Kafka producer not available")  # NEW LOG
+            return False
     except Exception as e:
-        print(f"Failed to send event to Kafka: {e}")
+        logger.error(f"Failed to send to Kafka: {e}")  # NEW LOG
         return False
 
 @app.route('/api/login-event', methods=['POST'])
@@ -107,6 +112,11 @@ def handle_login_event():
         
         # Generate complete event with random data
         event = generate_login_event(username, region, status)
+
+        logger.info(
+            f"Login event: user={username}, region={region}, status={status}",
+            extra={'event_data': event}
+        )
         
         # Push to Kafka
         kafka_success = push_to_kafka(event)
@@ -131,6 +141,7 @@ def handle_login_event():
 def health_check():
     """Health check endpoint"""
     kafka_status = "connected" if get_kafka_producer() is not None else "disconnected"
+    logger.info(f"Health check - Kafka status: {kafka_status}")  # NEW LOG
     return jsonify({
         "status": "healthy",
         "kafka": kafka_status
@@ -139,4 +150,5 @@ def health_check():
 if __name__ == '__main__':
     port = int(os.getenv("BACKEND_PORT", 5002))
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    logger.info(f"Starting backend service on port {port} with debug={debug}")  # NEW LOG
     app.run(host='0.0.0.0', port=port, debug=debug)

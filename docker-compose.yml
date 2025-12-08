@@ -19,10 +19,13 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_TOPIC=login_events
       - BACKEND_PORT=5002
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5044
     ports:
       - "5002:5002"
     depends_on:
       - kafka
+      - logstash
     networks:
       - devops-net
 
@@ -59,6 +62,8 @@ services:
       - POSTGRES_DB=logindata
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=pwd
+      - LOGSTASH_HOST=logstash
+      - LOGSTASH_PORT=5044
     depends_on:
       kafka:
         condition: service_started
@@ -110,6 +115,57 @@ services:
     networks:
       - devops-net
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - devops-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    volumes:
+      - ./elk/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      - "LS_JAVA_OPTS=-Xmx256m -Xms256m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - devops-net
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - devops-net
+
+
   test_runner:
     build:
       context: .
@@ -134,6 +190,7 @@ services:
 
 volumes:
   postgres_data:
+  elasticsearch_data:
 
 networks:
   devops-net:

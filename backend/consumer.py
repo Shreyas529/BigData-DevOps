@@ -5,8 +5,11 @@ import time
 import psycopg2
 from kafka import KafkaConsumer
 from dotenv import load_dotenv
+from elk_logger import setup_logging
 
 load_dotenv()
+
+logger = setup_logging(service_name='consumer')
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
@@ -41,9 +44,11 @@ def get_db_connection():
                 password=DB_PASS
             )
             print(f"Connected to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
+            logger.info(f"Connected to PostgreSQL at {DB_HOST}:{DB_PORT}/{DB_NAME}")
             return conn
         except psycopg2.OperationalError as e:
             print(f"Failed to connect to PostgreSQL (attempt {attempt + 1}/{max_retries}): {e}")
+            logger.error(f"PostgreSQL connection error: {e}")
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
     
@@ -90,6 +95,7 @@ def insert_event(conn, event):
         ))
         conn.commit()
         cur.close()
+        logger.info(f"Inserted event into PostgreSQL: user_id={event.get('user_id')}, status={event.get('status')}")
         return True
     except Exception as e:
         print(f"Error inserting event: {e}")
@@ -102,26 +108,29 @@ def consume_events():
     print("Starting Kafka consumer...")
     
     # Get connections
-    # conn = get_db_connection()
+    conn = get_db_connection()
     consumer = get_kafka_consumer()
     
     event_count = 0
     
     try:
         print("Waiting for messages...")
+        logger.info(f"Kafka consumer started, waiting for messages on the kafka topic: {KAFKA_TOPIC}")
         for message in consumer:
             event = message.value
             
             # Log received event
             print(f"Received event: user_id={event.get('user_id')}, "
                   f"country={event.get('country')}, status={event.get('status')}, plan={event.get('plan')}, device={event.get('device')}, event_time={event.get('event_time')}")
+
+            logger.info(f"Received event from Kafka: user_id={event.get('user_id')}, status={event.get('status')}")
             
             # Insert into PostgreSQL
-            # if insert_event(conn, event):
-            #     event_count += 1
-            #     print(f"Inserted event #{event_count} into PostgreSQL")
-            # else:
-            #     print(f"Failed to insert event: {event}")
+            if insert_event(conn, event):
+                event_count += 1
+                print(f"Inserted event #{event_count} into PostgreSQL")
+            else:
+                print(f"Failed to insert event: {event}")
                 
     except KeyboardInterrupt:
         print(f"\nConsumer stopped. Total events processed: {event_count}")
@@ -129,7 +138,7 @@ def consume_events():
         print(f"Error in consumer loop: {e}")
     finally:
         consumer.close()
-        # conn.close()
+        conn.close()
         print("Connections closed.")
 
 
