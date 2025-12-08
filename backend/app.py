@@ -137,6 +137,6 @@ def health_check():
     }), 200
 
 if __name__ == '__main__':
-    port = int(os.getenv("BACKEND_PORT", 5000))
+    port = int(os.getenv("BACKEND_PORT", 5002))
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     app.run(host='0.0.0.0', port=port, debug=debug)

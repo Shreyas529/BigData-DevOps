@@ -10,7 +10,7 @@ DB_USER = os.getenv("POSTGRES_USER", "postgres")
 DB_PASS = os.getenv("POSTGRES_PASSWORD", "pwd")
 
 
-async def main(table_name: str = "test_login_events"):
+async def main(table_name: str = "login_events"):
     """
     Initialize the database:
     - Create the specified table if it does not exist.

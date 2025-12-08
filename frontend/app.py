@@ -5,7 +5,7 @@ import requests
 import os
 
 # Configuration
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5002")
 
 # Available regions
 REGIONS = ["US", "IN", "UK", "DE", "CA", "FR", "JP", "AU", "BR", "MX"]
