@@ -14,7 +14,7 @@ KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "login_events")
 KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "login_consumer_group")
 
 # PostgreSQL Configuration
-DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
+DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 DB_NAME = os.getenv("POSTGRES_DB", "logindata")
 DB_USER = os.getenv("POSTGRES_USER", "postgres")

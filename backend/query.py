@@ -57,13 +57,13 @@ ORDER BY ratio DESC NULLS LAST;
 """
 
 DELETE_OLD_QUERY = """
-DELETE FROM login_events
+DELETE FROM login_events IF EXISTS
 WHERE event_time < $1;
 """
 
 async def delete_query(DB_CONFIG, table_name):
     conn = await asyncpg.connect(**DB_CONFIG)
-    await conn.fetchrow(f"DELETE FROM {table_name};")
+    await conn.fetchrow(f"""DELETE FROM {table_name}""")
 
 def delivery_report(err, msg):
     if err:
@@ -106,7 +106,7 @@ async def query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, TABLE_NAME, RETENTION
         watermark = int(row["max_ts"])
         await asyncio.sleep(0.5)    
         # print(watermark, last_watermark)
-
+        
         if (watermark == last_watermark):
             print(watermark)
             break

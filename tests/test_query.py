@@ -4,6 +4,7 @@ import asyncpg
 from test_generator import generate_events
 from ground_truth import compute_ground_truth
 from backend.query import query_loop, delete_query, WINDOW_SIZE, DB_CONFIG
+from backend.db_init import main as db_init
 
 
 WINDOW_QUERY = """
@@ -77,6 +78,11 @@ async def run_test():
     THROUGHPUT = 50                   # events/sec
     DURATION_MS = 60000               # run 60 seconds → enough for multiple windows
 
+    # ensure DB init completes (db_init may be async or sync)
+    if asyncio.iscoroutinefunction(db_init):
+        await db_init("test_login_events")
+    else:
+        db_init("test_login_events")
     await delete_query(DB_CONFIG,"test_login_events")
 
     print("Launching parallel tasks...")
