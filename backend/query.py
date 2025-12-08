@@ -57,7 +57,7 @@ ORDER BY ratio DESC NULLS LAST;
 """
 
 DELETE_OLD_QUERY = """
-DELETE FROM login_events IF EXISTS
+DELETE FROM login_events
 WHERE event_time < $1;
 """
 
@@ -72,7 +72,7 @@ def delivery_report(err, msg):
         print(f"Delivered window analytics → {msg.topic()} [{msg.partition()}]")
 
 
-async def query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, TABLE_NAME, RETENTION_MS=None, DELETE_OLD_QUERY=None):
+async def query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, TABLE_NAME, RETENTION_MS=None, DELETE_OLD_QUERY=None, termination_time=None):
     conn = await asyncpg.connect(**DB_CONFIG)
     print("Connected to Postgres.")
 
@@ -97,7 +97,14 @@ async def query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, TABLE_NAME, RETENTION
 
     last_watermark = -1
 
+    start_time = time.time()
+
     while True:
+
+        if (termination_time != None):
+            if (((time.time() - start_time)*1000) > termination_time):
+                break
+
         row = await conn.fetchrow(f"SELECT MAX(event_time) AS max_ts FROM {TABLE_NAME};")
 
         if row["max_ts"] is None:
@@ -107,9 +114,9 @@ async def query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, TABLE_NAME, RETENTION
         await asyncio.sleep(0.5)    
         # print(watermark, last_watermark)
         
-        if (watermark == last_watermark):
-            print(watermark)
-            break
+        # if (watermark == last_watermark):
+        #     print(watermark)
+        #     break
 
         last_watermark = watermark
 
@@ -151,4 +158,4 @@ async def query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, TABLE_NAME, RETENTION
 
 
 if __name__ == "__main__":
-    asyncio.run(query_loop(DB_CONFIG,WINDOW_SIZE,WINDOW_QUERY,"logindata",RETENTION_MS,DELETE_OLD_QUERY))
+    asyncio.run(query_loop(DB_CONFIG,WINDOW_SIZE,WINDOW_QUERY,"login_events",RETENTION_MS,DELETE_OLD_QUERY))

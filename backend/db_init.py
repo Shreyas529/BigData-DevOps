@@ -2,6 +2,7 @@
 import os
 import asyncpg
 from psycopg2 import sql  # just for formatting table names safely
+import asyncio
 
 DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
 DB_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
@@ -46,3 +47,6 @@ async def main(table_name: str = "login_events"):
     finally:
         if conn:
             await conn.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())

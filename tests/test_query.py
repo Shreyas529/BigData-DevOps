@@ -60,7 +60,7 @@ async def window_query_loop(runtime_ms):
     # while start < runtime_ms:
     # print(f"\n[Query Task] Querying window {start} → {end}")
 
-    db_rows = await query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, "test_login_events")
+    db_rows = await query_loop(DB_CONFIG, WINDOW_SIZE, WINDOW_QUERY, "test_login_events",termination_time=runtime_ms*1.1)
     print("[Query Task] DB Rows:", db_rows)
 
     results.append(db_rows)

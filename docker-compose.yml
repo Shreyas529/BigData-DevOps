@@ -34,9 +34,6 @@ services:
     container_name: netflix-db-init
     command: python db_init.py
     environment:
-
-
-
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=logindata
@@ -52,7 +49,7 @@ services:
   consumer:
     build: ./backend
     container_name: netflix-consumer
-    command: python consumer.py
+    command: python -u consumer.py
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_TOPIC=login_events
@@ -69,8 +66,25 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
     networks:
       - devops-net
+
+  backend-query:
+    build:
+      context: ./backend
+    container_name: netflix-backend-query
+    command: python -u query.py
+    environment:
+      - POSTGRES_HOST=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+      
+    networks: ["devops-net"]
 
   postgres:
     image: postgres:15
@@ -123,8 +137,8 @@ services:
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "9201:9200"
+      - "9301:9300"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
@@ -180,10 +194,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_started
-      consumer:
-        condition: service_started
+      # kafka:
+      #   condition: service_started
+      # consumer:
+      #   condition: service_started
     networks:
       - devops-net
 
