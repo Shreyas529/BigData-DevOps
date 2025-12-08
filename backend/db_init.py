@@ -1,58 +1,48 @@
-# db_init.py
+# backend/db_init.py
 import os
-import psycopg2
-from psycopg2 import sql
-from dotenv import load_dotenv
+import asyncpg
+from psycopg2 import sql  # just for formatting table names safely
 
-load_dotenv()
-
-DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
-DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
+DB_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 DB_NAME = os.getenv("POSTGRES_DB", "logindata")
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
 DB_PASS = os.getenv("POSTGRES_PASSWORD", "pwd")
 
-CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS login_events (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(50),
-    country VARCHAR(50),
-    device VARCHAR(50),
-    plan VARCHAR(50),
-    status VARCHAR(20),
-    event_time BIGINT
-);
-"""
 
-CREATE_FUNCTION_SQL = """
-CREATE OR REPLACE FUNCTION insert_login_event(
-    p_user_id VARCHAR,
-    p_country VARCHAR,
-    p_device VARCHAR,
-    p_plan VARCHAR,
-    p_status VARCHAR,
-    p_event_time BIGINT
-);
-"""
-
-def main():
+async def main(table_name: str = "test_login_events"):
+    """
+    Initialize the database:
+    - Create the specified table if it does not exist.
+    """
     conn = None
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS
+        conn = await asyncpg.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
         )
-        conn.autocommit = True
-        cur = conn.cursor()
-        print("Creating table...")
-        cur.execute(CREATE_TABLE_SQL)
-        print("Creating function table...")
-        cur.execute(CREATE_FUNCTION_SQL)
+
+        create_table_sql = f"""
+        CREATE TABLE IF NOT EXISTS "{table_name}" (
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(50),
+            country VARCHAR(50),
+            device VARCHAR(50),
+            plan VARCHAR(50),
+            status VARCHAR(20),
+            event_time BIGINT
+        );
+        """
+
+        print(f"Creating table '{table_name}' if it does not exist...")
+        await conn.execute(create_table_sql)
+        print(f"Table '{table_name}' ready.")
 
     except Exception as e:
         print("Error during DB init:", e)
     finally:
         if conn:
-            conn.close()
-
-if __name__ == "__main__":
-    main()
+            await conn.close()
