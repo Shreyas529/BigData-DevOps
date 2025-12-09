@@ -7,7 +7,7 @@
 
 - name: Wait for PostgreSQL to be ready
   shell: |
-    minikube kubectl -- wait --for=condition=ready pod -l app=postgres -n {{ k8s_namespace }} --timeout=180s
+    kubectl wait --for=condition=ready pod -l app=postgres -n {{ k8s_namespace }} --timeout=180s
   register: postgres_ready
   retries: 3
   delay: 10
@@ -15,7 +15,7 @@
 
 - name: Verify PostgreSQL is accepting connections
   shell: |
-    minikube kubectl -- exec -n {{ k8s_namespace }} deploy/postgres -- pg_isready -U postgres -d logindata
+    kubectl exec -n {{ k8s_namespace }} deploy/postgres -- pg_isready -U postgres -d logindata
   register: pg_isready
   retries: 10
   delay: 5
@@ -32,7 +32,7 @@
 
 - name: Wait for job pods to be cleaned up
   shell: |
-    minikube kubectl -- delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true
+    kubectl delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true
   ignore_errors: yes
 
 - name: Run Database Initialization Job
@@ -47,7 +47,7 @@
 
 - name: Wait for DB Init Job to complete
   shell: |
-    minikube kubectl -- wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
+    kubectl wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
   register: db_init_result
   retries: 3
   delay: 15
@@ -55,7 +55,7 @@
 
 - name: Check DB Init Job status
   shell: |
-    minikube kubectl -- get jobs db-init -n {{ k8s_namespace }}
+    kubectl get jobs db-init -n {{ k8s_namespace }}
   register: job_status
   changed_when: false
 

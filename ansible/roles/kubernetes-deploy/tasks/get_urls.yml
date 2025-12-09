@@ -1,12 +1,14 @@
 ---
 - name: Get Frontend Service URL
-  command: minikube service frontend -n {{ k8s_namespace }} --url
+  shell: |
+    minikube service frontend -n {{ k8s_namespace }} --url 2>/dev/null || kubectl get svc frontend -n {{ k8s_namespace }} -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}'
   register: frontend_url
   changed_when: false
   failed_when: false
 
 - name: Get Kibana Service URL
-  command: minikube service kibana -n {{ k8s_namespace }} --url
+  shell: |
+    minikube service kibana -n {{ k8s_namespace }} --url 2>/dev/null || kubectl get svc kibana -n {{ k8s_namespace }} -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}'
   register: kibana_url
   changed_when: false
   failed_when: false
