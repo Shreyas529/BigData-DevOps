@@ -39,7 +39,8 @@
   kubernetes.core.k8s:
     state: present
     namespace: "{{ k8s_namespace }}"
-    definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
+    src: "{{ k8s_manifests_dir }}/db-init-job.yaml"
+
 
 - name: Wait for job to be created
   pause:
