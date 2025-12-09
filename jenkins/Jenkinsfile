@@ -205,15 +205,15 @@ pipeline {
 
                             echo "Waiting for Kubernetes API server to be ready..."
                             READY=0
-                            for i in {1..30}; do
-                              if kubectl get nodes >/dev/null 2>&1; then
-                                echo "Kubernetes API server is ready."
-                                READY=1
-                                break
-                              fi
-                              echo "API server not ready yet (attempt $i/30)..."
-                              sleep 10
-                            done
+                            for i in $(seq 1 30); do
+                                if kubectl get nodes >/dev/null 2>&1; then
+                                    echo "Kubernetes API server is ready."
+                                    READY=1
+                                    break
+                                fi
+                                echo "API server not ready yet (attempt $i/30)..."
+                                sleep 10
+                                done
 
                             if [ "\$READY" -ne 1 ]; then
                               echo "ERROR: Kubernetes API server did not become ready in time."
