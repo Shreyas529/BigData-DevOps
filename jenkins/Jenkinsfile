@@ -70,43 +70,43 @@ pipeline {
         //     }
         // }
 
-        // stage('Build Images') {
-        //     steps {
-        //         script {
-        //             sh """
-        //                 echo "Building Frontend Image..."
-        //                 docker build -t ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER} ./frontend
+        stage('Build Images') {
+            steps {
+                script {
+                    sh """
+                        echo "Building Frontend Image..."
+                        docker build -t ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER} ./frontend
 
-        //                 echo "Building Backend Image..."
-        //                 docker build -t ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER} ./backend
-        //             """
-        //         }
-        //     }
-        // }
+                        echo "Building Backend Image..."
+                        docker build -t ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER} ./backend
+                    """
+                }
+            }
+        }
 
-        // stage('Push to DockerHub') {
-        //     steps {
-        //         script {
-        //             withCredentials([usernamePassword(
-        //                 credentialsId: DOCKER_HUB_CREDENTIALS,
-        //                 usernameVariable: 'DOCKER_USER',
-        //                 passwordVariable: 'DOCKER_PASS'
-        //             )]) {
-        //                 sh """
-        //                     echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
+        stage('Push to DockerHub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: DOCKER_HUB_CREDENTIALS,
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
                             
-        //                     echo "Pushing Frontend Image..."
-        //                     docker push ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}
+                            echo "Pushing Frontend Image..."
+                            docker push ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}
 
-        //                     echo "Pushing Backend Image..."
-        //                     docker push ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}
+                            echo "Pushing Backend Image..."
+                            docker push ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}
 
-        //                     docker logout
-        //                 """
-        //             }
-        //         }
-        //     }
-        // }
+                            docker logout
+                        """
+                    }
+                }
+            }
+        }
 
         stage('Pull Images from DockerHub') {
             steps {
