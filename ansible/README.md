@@ -46,7 +46,7 @@ ansible/
             ├── main.yml            # Main task file
             ├── prerequisites.yml   # Minikube setup
             ├── config.yml          # ConfigMaps and Secrets
-            ├── messaging.yml       # Kafka and Zookeeper
+            ├── messaging.yml       # Kafka (KRaft mode)
             ├── database.yml        # PostgreSQL setup
             ├── elk.yml             # ELK Stack deployment
             ├── application.yml     # App services deployment
@@ -94,7 +94,7 @@ The playbook deploys services in the following order:
 
 1. **Prerequisites**: Verify Minikube, enable metrics-server
 2. **Configuration**: Create namespace, PVCs, ConfigMaps, Secrets
-3. **Messaging**: Deploy Zookeeper → Kafka
+3. **Messaging**: Deploy Kafka (KRaft mode)
 4. **Database**: Deploy PostgreSQL → Run DB init job
 5. **ELK Stack**: Deploy Elasticsearch → Logstash → Kibana
 6. **Application**: Deploy Backend → Consumer → Frontend

@@ -11,8 +11,7 @@
 - ✅ **persistent-volumes.yaml** - PVCs for PostgreSQL and Elasticsearch data
 
 #### Infrastructure Services
-- ✅ **zookeeper-deployment.yaml** - With health checks and resource limits
-- ✅ **kafka-deployment.yaml** - With init container waiting for Zookeeper
+- ✅ **kafka-deployment.yaml** - Kafka with KRaft mode (no Zookeeper required)
 - ✅ **postgres-deployment.yaml** - With liveness/readiness probes and PVC
 - ✅ **db-init-job.yaml** - Kubernetes Job with init container for DB setup
 
@@ -45,7 +44,7 @@
 - ✅ **kubernetes-deploy/tasks/main.yml** - Main orchestration
 - ✅ **kubernetes-deploy/tasks/prerequisites.yml** - Minikube verification
 - ✅ **kubernetes-deploy/tasks/config.yml** - ConfigMaps and Secrets
-- ✅ **kubernetes-deploy/tasks/messaging.yml** - Kafka and Zookeeper
+- ✅ **kubernetes-deploy/tasks/messaging.yml** - Kafka (KRaft mode)
 - ✅ **kubernetes-deploy/tasks/database.yml** - PostgreSQL and init job
 - ✅ **kubernetes-deploy/tasks/elk.yml** - ELK stack deployment
 - ✅ **kubernetes-deploy/tasks/application.yml** - App services
@@ -62,7 +61,7 @@
 
 ### Init Containers
 Every service has proper dependency checking:
-- Kafka waits for Zookeeper
+- Kafka runs in KRaft mode (no Zookeeper dependency)
 - Backend waits for Kafka and Logstash
 - Consumer waits for Kafka, PostgreSQL, and Logstash
 - Frontend waits for Backend
@@ -86,7 +85,7 @@ Every service has proper dependency checking:
 ### Health Checks
 - **Liveness Probes**: Restart unhealthy containers
 - **Readiness Probes**: Control traffic routing
-- Implemented for: backend, frontend, postgres, kafka, zookeeper, elasticsearch, logstash, kibana
+- Implemented for: backend, frontend, postgres, kafka, elasticsearch, logstash, kibana
 
 ### Resource Management
 All containers have:
@@ -111,8 +110,7 @@ BigData-DevOps/
 │   ├── secrets.yaml                       # Secrets management
 │   ├── configmap.yaml                     # Configuration
 │   ├── persistent-volumes.yaml            # Storage
-│   ├── zookeeper-deployment.yaml          # Zookeeper
-│   ├── kafka-deployment.yaml              # Kafka
+│   ├── kafka-deployment.yaml              # Kafka (KRaft mode)
 │   ├── postgres-deployment.yaml           # Database
 │   ├── db-init-job.yaml                   # DB initialization
 │   ├── elasticsearch-deployment.yaml      # Elasticsearch
@@ -140,7 +138,7 @@ BigData-DevOps/
                 ├── main.yml               # Orchestration
                 ├── prerequisites.yml      # Setup
                 ├── config.yml             # Config deployment
-                ├── messaging.yml          # Kafka/Zookeeper
+                ├── messaging.yml          # Kafka (KRaft mode)
                 ├── database.yml           # PostgreSQL
                 ├── elk.yml                # ELK Stack
                 ├── application.yml        # App services
@@ -182,7 +180,7 @@ The Ansible playbook deploys in this order:
 
 1. **Prerequisites** → Verify Minikube, enable metrics-server
 2. **Configuration** → Namespace, PVCs, ConfigMaps, Secrets
-3. **Messaging** → Zookeeper → Kafka
+3. **Messaging** → Kafka (KRaft mode)
 4. **Database** → PostgreSQL → DB Init Job
 5. **Logging** → Elasticsearch → Logstash → Kibana
 6. **Application** → Backend → Consumer → Frontend

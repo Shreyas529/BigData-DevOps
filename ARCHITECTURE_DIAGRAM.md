@@ -98,16 +98,16 @@ Namespace: bigdata-devops
 │  Infrastructure Layer                                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌──────────┐     ┌──────────┐     ┌──────────────┐       │
-│  │Zookeeper │────>│  Kafka   │     │ PostgreSQL   │       │
-│  │  (1 pod) │     │ (1 pod)  │     │   (1 pod)    │       │
-│  └──────────┘     └──────────┘     └──────┬───────┘       │
-│                                            │               │
-│                                            v               │
-│                                     ┌──────────────┐       │
-│                                     │  DB Init Job │       │
-│                                     │ (Runs once)  │       │
-│                                     └──────────────┘       │
+│  ┌──────────────────┐          ┌──────────────┐            │
+│  │  Kafka (KRaft)   │          │ PostgreSQL   │            │
+│  │    (1 pod)       │          │   (1 pod)    │            │
+│  └──────────────────┘          └──────┬───────┘            │
+│                                        │                    │
+│                                        v                    │
+│                                 ┌──────────────┐            │
+│                                 │  DB Init Job │            │
+│                                 │ (Runs once)  │            │
+│                                 └──────────────┘            │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -169,7 +169,7 @@ User ──> Frontend ──> Backend ──> Kafka ──> Consumer ──> Pos
 └─────────────────────────────────────────────────────────────────────┘
 
 ✅ Init Containers:
-   - Kafka waits for Zookeeper
+   - Kafka runs in KRaft mode (no Zookeeper dependency)
    - Backend waits for Kafka + Logstash
    - Consumer waits for Kafka + PostgreSQL + Logstash
    - Frontend waits for Backend

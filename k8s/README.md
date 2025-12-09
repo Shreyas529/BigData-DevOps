@@ -54,8 +54,7 @@ ansible-playbook -i inventory.ini playbook.yaml
 - **db-init-job.yaml** - Kubernetes Job to initialize database schema
 
 #### Messaging Layer
-- **zookeeper-deployment.yaml** - Zookeeper for Kafka coordination
-- **kafka-deployment.yaml** - Kafka message broker with init containers
+- **kafka-deployment.yaml** - Kafka message broker with KRaft mode (no Zookeeper required)
 
 #### Logging Stack (ELK)
 - **elasticsearch-deployment.yaml** - Log storage with init containers for permissions
@@ -154,7 +153,7 @@ ansible/roles/kubernetes-deploy/
     ├── main.yml              # Orchestrates all tasks
     ├── prerequisites.yml     # Setup Minikube
     ├── config.yml           # Deploy ConfigMaps/Secrets
-    ├── messaging.yml        # Deploy Kafka/Zookeeper
+    ├── messaging.yml        # Deploy Kafka (KRaft mode)
     ├── database.yml         # Deploy PostgreSQL
     ├── elk.yml              # Deploy ELK Stack
     ├── application.yml      # Deploy app services
@@ -175,8 +174,7 @@ ansible/roles/kubernetes-deploy/
    └─> Deploy Secrets
 
 3. Infrastructure Layer
-   └─> Zookeeper
-   └─> Kafka (waits for Zookeeper)
+   └─> Kafka (KRaft mode - no Zookeeper required)
    └─> PostgreSQL
    └─> DB Init Job (waits for PostgreSQL)
 

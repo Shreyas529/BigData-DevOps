@@ -128,7 +128,7 @@ ansible/cleanup.yaml         # Cleanup script
 
 ## 📝 Init Containers
 
-- **Kafka** → waits for Zookeeper
+- **Kafka** → runs in KRaft mode (no dependencies)
 - **Backend** → waits for Kafka, Logstash
 - **Consumer** → waits for Kafka, PostgreSQL, Logstash
 - **Frontend** → waits for Backend
