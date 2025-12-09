@@ -213,6 +213,10 @@ pipeline {
                             # Activate virtual environment
                             source ansible-venv/bin/activate
                             
+                            # Get the Python path from the virtual environment
+                            VENV_PYTHON=$(which python3)
+                            echo "Using Python interpreter: ${VENV_PYTHON}"
+                            
                             # Upgrade pip
                             pip install --upgrade pip
                             
@@ -220,13 +224,15 @@ pipeline {
                             echo "Installing Ansible and dependencies..."
                             pip install --upgrade ansible-core kubernetes openshift pyyaml jsonpatch
                             
+                            # Verify kubernetes library is installed
+                            echo "Verifying Kubernetes library..."
+                            python3 -c "import kubernetes; print('✅ Kubernetes library version:', kubernetes.__version__)"
+                            
                             # Install Kubernetes Ansible collection (specific compatible version)
                             echo "Installing Kubernetes collection..."
                             ansible-galaxy collection install kubernetes.core:2.4.0 --force
                             
-                            # Verify installation
-                            echo "Verifying installations..."
-                            python -c "import kubernetes; print('Kubernetes library version:', kubernetes.__version__)"
+                            # Verify Ansible version
                             ansible --version
 
                             echo "========================================"
@@ -312,11 +318,13 @@ pipeline {
                             export BUILD_NUMBER="${BUILD_NUMBER}"
                             export KUBECONFIG=~/.kube/config
                             
-                            # Run Ansible playbook with increased verbosity for debugging
+                            # Run Ansible playbook with explicit Python interpreter
+                            # This ensures Ansible uses the virtual environment's Python
                             ansible-playbook -i inventory.ini playbook-with-roles.yaml \
                                 -e "docker_username=${DOCKER_USER}" \
                                 -e "docker_password=${DOCKER_PASS}" \
                                 -e "build_number=${BUILD_NUMBER}" \
+                                -e "ansible_python_interpreter=${VENV_PYTHON}" \
                                 -vv
                             
                             # Deactivate virtual environment
