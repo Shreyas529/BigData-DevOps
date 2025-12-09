@@ -9,7 +9,7 @@ pipeline {
     }
     
     environment {
-        DOCKER_HUB_CREDENTIALS = 'dockerhub-credentials'
+        DOCKER_HUB_CREDENTIALS = 'dockerhub-creds'
         IMAGE_NAME = 'siddharth194/bigdata-devops'
         BACKEND_TAG = 'backend'
         FRONTEND_TAG = 'frontend'
@@ -47,7 +47,7 @@ pipeline {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/Shreyas529/BigData-DevOps.git',
-                    credentialsId: 'github-credentials'
+                    credentialsId: 'github-creds'
             }
         }
 
