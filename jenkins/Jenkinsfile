@@ -204,19 +204,30 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         sh '''
-                            # Check if Ansible is installed
-                            if ! command -v ansible-playbook &> /dev/null; then
-                                echo "Installing Ansible..."
-                                pip3 install ansible
+                            # Create virtual environment if it doesn't exist
+                            if [ ! -d "ansible-venv" ]; then
+                                echo "Creating Python virtual environment..."
+                                python3 -m venv ansible-venv
                             fi
+                            
+                            # Activate virtual environment
+                            source ansible-venv/bin/activate
+                            
+                            # Upgrade pip
+                            pip install --upgrade pip
+                            
+                            # Install required packages in virtual environment
+                            echo "Installing Ansible and dependencies..."
+                            pip install ansible kubernetes openshift pyyaml jsonpatch
                             
                             # Install Kubernetes Ansible collection
                             echo "Installing Kubernetes collection..."
-                            ansible-galaxy collection install kubernetes.core --force || true
+                            ansible-galaxy collection install kubernetes.core --force
                             
-                            # Install Python Kubernetes client
-                            echo "Installing Python Kubernetes client..."
-                            pip3 install kubernetes openshift || true
+                            # Verify installation
+                            echo "Verifying installations..."
+                            python -c "import kubernetes; print('Kubernetes library version:', kubernetes.__version__)"
+                            ansible --version
 
                             echo "========================================"
                             echo " Resetting Minikube cluster"
@@ -229,7 +240,6 @@ pipeline {
                             minikube start \
                               --driver=docker \
                               --wait=all
-                              
 
                             # Update kubectl config from minikube
                             echo "Configuring kubectl..."
@@ -295,11 +305,15 @@ pipeline {
                             export DOCKER_PASSWORD="${DOCKER_PASS}"
                             export BUILD_NUMBER="${BUILD_NUMBER}"
                             
+                            # Run Ansible playbook (virtual environment is already activated)
                             ansible-playbook -i inventory.ini playbook-with-roles.yaml \
                                 -e "docker_username=${DOCKER_USER}" \
                                 -e "docker_password=${DOCKER_PASS}" \
                                 -e "build_number=${BUILD_NUMBER}" \
                                 -v
+                            
+                            # Deactivate virtual environment
+                            deactivate
                         '''
                     }
                 }
