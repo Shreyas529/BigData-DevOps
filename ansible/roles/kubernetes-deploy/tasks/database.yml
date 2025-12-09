@@ -28,22 +28,41 @@
     kind: Job
     namespace: "{{ k8s_namespace }}"
     name: db-init
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Wait for job pods to be cleaned up
   shell: |
-    minikube kubectl -- delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true
-  ignore_errors: yes
+    minikube kubectl -- delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true --wait=true
+  ignore_errors: true
+
+- name: Pause to ensure cleanup
+  pause:
+    seconds: 5
+
+- name: Render DB Init Job template
+  set_fact:
+    db_init_job_content: "{{ lookup('template', k8s_manifests_dir + '/templates/db-init-job.yaml.j2') }}"
 
 - name: Run Database Initialization Job
   kubernetes.core.k8s:
     state: present
     namespace: "{{ k8s_namespace }}"
-    definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
+    definition: "{{ db_init_job_content | from_yaml }}"
 
-- name: Wait for job to be created
-  pause:
-    seconds: 5
+- name: Wait for job pod to be created
+  shell: |
+    for i in {1..30}; do
+      POD=$(minikube kubectl -- get pods -n {{ k8s_namespace }} -l app=db-init -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+      if [ ! -z "$POD" ]; then
+        echo "Job pod created: $POD"
+        exit 0
+      fi
+      echo "Waiting for job pod... attempt $i/30"
+      sleep 2
+    done
+    exit 1
+  register: job_pod_created
+  changed_when: false
 
 - name: Wait for DB Init Job to complete
   shell: |
