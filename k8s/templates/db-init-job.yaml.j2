@@ -20,8 +20,9 @@ spec:
         command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
       containers:
       - name: db-init
-        image: "{{ docker_repo }}:{{ backend_tag }}-{{ build_number }}"
-        command: ["python", "-u","db_init.py"]
+        image: "{{ docker_username }}/bigdata-devops:backend-{{ build_number }}"
+        imagePullPolicy: Always
+        command: ["python", "-u", "db_init.py"]
         env:
         - name: POSTGRES_HOST
           value: "postgres"
