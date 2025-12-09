@@ -3,9 +3,9 @@ pipeline {
     
     triggers {
         // Poll SCM every 5 minutes for changes
-        pollSCM('H/5 * * * *')
+        // pollSCM('H/5 * * * *')
         // Or use GitHub webhook (recommended)
-        // githubPush()
+        githubPush()
     }
     
     environment {
@@ -165,7 +165,7 @@ pipeline {
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
-                        sh """
+                        sh '''
                             # Check if Ansible is installed
                             if ! command -v ansible-playbook &> /dev/null; then
                                 echo "Installing Ansible..."
@@ -189,11 +189,11 @@ pipeline {
                             echo "========================================"
                             echo " Starting fresh Minikube"
                             echo "========================================"
-                            minikube start \\
-                              --driver=docker \\
-                              --memory=8192 \\
-                              --cpus=4 \\
-                              --addons=default-storageclass,metrics-server \\
+                            minikube start \
+                              --driver=docker \
+                              --memory=8192 \
+                              --cpus=4 \
+                              --addons=default-storageclass,metrics-server \
                               --kubernetes-version=v1.28.3 || {
                                 echo "Failed to start Minikube. Please ensure Minikube is available."
                                 minikube status || true
@@ -213,9 +213,9 @@ pipeline {
                                 fi
                                 echo "API server not ready yet (attempt $i/30)..."
                                 sleep 10
-                                done
+                            done
 
-                            if [ "\$READY" -ne 1 ]; then
+                            if [ "$READY" -ne 1 ]; then
                               echo "ERROR: Kubernetes API server did not become ready in time."
                               echo "Cluster debug info:"
                               minikube status || true
@@ -229,7 +229,7 @@ pipeline {
                             # Verify ansible directory exists
                             if [ ! -d "ansible" ]; then
                                 echo "ERROR: ansible directory not found!"
-                                echo "Current directory: \$(pwd)"
+                                echo "Current directory: $(pwd)"
                                 ls -la
                                 exit 1
                             fi
@@ -245,16 +245,16 @@ pipeline {
                                 exit 1
                             fi
                             
-                            export DOCKER_USERNAME=\${DOCKER_USER}
-                            export DOCKER_PASSWORD=\${DOCKER_PASS}
-                            export BUILD_NUMBER=\${BUILD_NUMBER}
+                            export DOCKER_USERNAME="${DOCKER_USER}"
+                            export DOCKER_PASSWORD="${DOCKER_PASS}"
+                            export BUILD_NUMBER="${BUILD_NUMBER}"
                             
-                            ansible-playbook -i inventory.ini playbook-with-roles.yaml \\
-                                -e "docker_username=\${DOCKER_USER}" \\
-                                -e "docker_password=\${DOCKER_PASS}" \\
-                                -e "build_number=\${BUILD_NUMBER}" \\
+                            ansible-playbook -i inventory.ini playbook-with-roles.yaml \
+                                -e "docker_username=${DOCKER_USER}" \
+                                -e "docker_password=${DOCKER_PASS}" \
+                                -e "build_number=${BUILD_NUMBER}" \
                                 -v
-                        """
+                        '''
                     }
                 }
             }
@@ -263,7 +263,7 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    sh """
+                    sh '''
                         echo "========================================"
                         echo "  Verifying Deployment to Minikube"
                         echo "========================================"
@@ -314,7 +314,7 @@ pipeline {
                         
                         echo ""
                         echo "========================================"
-                    """
+                    '''
                 }
             }
         }
