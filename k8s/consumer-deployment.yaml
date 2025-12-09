@@ -79,21 +79,3 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
-        livenessProbe:
-          exec:
-            command:
-            - python
-            - -c
-            - "import sys; sys.exit(0)"
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-        readinessProbe:
-          exec:
-            command:
-            - python
-            - -c
-            - "import sys; sys.exit(0)"
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
