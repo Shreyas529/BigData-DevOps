@@ -218,11 +218,11 @@ pipeline {
                             
                             # Install required packages in virtual environment
                             echo "Installing Ansible and dependencies..."
-                            pip install ansible kubernetes openshift pyyaml jsonpatch
+                            pip install --upgrade ansible-core kubernetes openshift pyyaml jsonpatch
                             
-                            # Install Kubernetes Ansible collection
+                            # Install Kubernetes Ansible collection (specific compatible version)
                             echo "Installing Kubernetes collection..."
-                            ansible-galaxy collection install kubernetes.core --force
+                            ansible-galaxy collection install kubernetes.core:2.4.0 --force
                             
                             # Verify installation
                             echo "Verifying installations..."
@@ -230,16 +230,24 @@ pipeline {
                             ansible --version
 
                             echo "========================================"
-                            echo " Resetting Minikube cluster"
+                            echo " Checking Minikube status"
                             echo "========================================"
-                            minikube delete --all --purge || true
                             
-                            echo "========================================"
-                            echo " Starting fresh Minikube"
-                            echo "========================================"
-                            minikube start \
-                              --driver=docker \
-                              --wait=all
+                            # Check if Minikube is already running
+                            if minikube status >/dev/null 2>&1; then
+                                echo "✅ Minikube is already running"
+                                minikube status
+                            else
+                                echo "⚠️  Minikube is not running. Starting..."
+                                minikube delete --all --purge || true
+                                
+                                minikube start \
+                                  --driver=docker \
+                                  --kubernetes-version=v1.28.0 \
+                                  --memory=6144 \
+                                  --cpus=4 \
+                                  --wait=all
+                            fi
 
                             # Update kubectl config from minikube
                             echo "Configuring kubectl..."
@@ -249,21 +257,17 @@ pipeline {
                             export KUBECONFIG=~/.kube/config
                             
                             # Set kubectl context
-                            kubectl config use-context minikube || true
+                            kubectl config use-context minikube
                             
                             # Verify kubectl can connect
                             echo "Verifying kubectl connection..."
-                            kubectl cluster-info || {
-                                echo "kubectl cannot connect, trying to fix..."
-                                minikube kubectl -- config view --raw > ~/.kube/config
-                                chmod 600 ~/.kube/config
-                            }
-
+                            kubectl cluster-info
+                            
                             echo "Waiting for Kubernetes API server to be ready..."
                             READY=0
                             for i in $(seq 1 30); do
                                 if kubectl get nodes >/dev/null 2>&1; then
-                                    echo "Kubernetes API server is ready."
+                                    echo "✅ Kubernetes API server is ready."
                                     READY=1
                                     break
                                 fi
@@ -272,7 +276,7 @@ pipeline {
                             done
 
                             if [ "$READY" -ne 1 ]; then
-                              echo "ERROR: Kubernetes API server did not become ready in time."
+                              echo "❌ ERROR: Kubernetes API server did not become ready in time."
                               echo "Cluster debug info:"
                               minikube status || true
                               kubectl get pods -A || true
@@ -291,7 +295,9 @@ pipeline {
                             fi
                             
                             # Run Ansible playbook
-                            echo "Running Ansible playbook..."
+                            echo "========================================"
+                            echo " Running Ansible Deployment"
+                            echo "========================================"
                             cd ansible
                             
                             # Verify playbook exists
@@ -304,13 +310,14 @@ pipeline {
                             export DOCKER_USERNAME="${DOCKER_USER}"
                             export DOCKER_PASSWORD="${DOCKER_PASS}"
                             export BUILD_NUMBER="${BUILD_NUMBER}"
+                            export KUBECONFIG=~/.kube/config
                             
-                            # Run Ansible playbook (virtual environment is already activated)
+                            # Run Ansible playbook with increased verbosity for debugging
                             ansible-playbook -i inventory.ini playbook-with-roles.yaml \
                                 -e "docker_username=${DOCKER_USER}" \
                                 -e "docker_password=${DOCKER_PASS}" \
                                 -e "build_number=${BUILD_NUMBER}" \
-                                -v
+                                -vv
                             
                             # Deactivate virtual environment
                             deactivate
