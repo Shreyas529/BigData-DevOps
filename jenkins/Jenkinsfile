@@ -229,7 +229,7 @@ pipeline {
                             minikube start \
                               --driver=docker \
                               --wait=all
-                              }
+                              
 
                             # Update kubectl config from minikube
                             echo "Configuring kubectl..."
