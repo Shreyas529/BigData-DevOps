@@ -2,7 +2,7 @@
 - name: Deploy BigData-DevOps Application to Minikube
   hosts: localhost
   connection: local
-  gather_facts: yes
+  gather_facts: true
   
   vars:
     k8s_manifests_dir: "../k8s"
