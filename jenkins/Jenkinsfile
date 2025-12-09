@@ -21,7 +21,7 @@ pipeline {
                 script {
                     sh '''
                         # stop compose project and prune system state
-                        docker compose -p test down -v || true
+                        docker-compose -p test down -v || true
                         docker system prune -af || true
 
                         echo "Removing old images for ${IMAGE_NAME} (frontend/backed tags)..."
@@ -55,7 +55,7 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        docker compose -f docker-compose.test.yml \
+                        docker-compose -f docker-compose.test.yml \
                             --project-name test \
                             up --build --abort-on-container-exit --exit-code-from test_runner
                     '''
@@ -313,7 +313,7 @@ pipeline {
         always {
             script {
                 sh '''
-                    docker compose -p test down -v || true
+                    docker-compose -p test down -v || true
                 '''
             }
         }
