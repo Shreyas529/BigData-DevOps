@@ -39,15 +39,11 @@
   pause:
     seconds: 5
 
-- name: Render DB Init Job template
-  set_fact:
-    db_init_job_content: "{{ lookup('template', k8s_manifests_dir + '/templates/db-init-job.yaml.j2') }}"
-
 - name: Run Database Initialization Job
   kubernetes.core.k8s:
     state: present
     namespace: "{{ k8s_namespace }}"
-    definition: "{{ db_init_job_content | from_yaml }}"
+    src: "{{ k8s_manifests_dir }}/db-init-job.yaml"
 
 - name: Wait for job pod to be created
   shell: |
