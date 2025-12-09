@@ -36,20 +36,24 @@ spec:
           value: "1"
         - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
           value: "true"
+        - name: KAFKA_LOG4J_ROOT_LOGLEVEL
+          value: "WARN"
+        - name: KAFKA_TOOLS_LOG4J_LOGLEVEL
+          value: "ERROR"
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "250m"
+            memory: "384Mi"
+            cpu: "200m"
           limits:
-            memory: "1Gi"
-            cpu: "1000m"
+            memory: "768Mi"
+            cpu: "800m"
         startupProbe:
           tcpSocket:
             port: 9092
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
         livenessProbe:
           tcpSocket:
             port: 9092
