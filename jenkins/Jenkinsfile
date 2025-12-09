@@ -20,9 +20,8 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        # Stop compose project and prune system state
+                        # Stop compose project and prune test state
                         docker-compose -p test down -v || true
-                        docker system prune -af || true
 
                         echo "Removing old images for ${IMAGE_NAME} (frontend/backend tags)..."
 
@@ -36,7 +35,7 @@ pipeline {
                           | awk -v repo="${IMAGE_NAME}" -v prefix="${BACKEND_TAG}-" '$1 ~ (repo ":" prefix) {print $2}' \
                           | xargs -r docker rmi -f || true
 
-                        # Cleanup any dangling images
+                        # Cleanup dangling images only (safe for Minikube)
                         docker image prune -f || true
                     '''
                 }
@@ -180,24 +179,53 @@ pipeline {
                             # Install Python Kubernetes client
                             echo "Installing Python Kubernetes client..."
                             pip3 install kubernetes openshift || true
+
+                            echo "========================================"
+                            echo " Resetting Minikube cluster"
+                            echo "========================================"
+                            minikube delete --all --purge || true
+                            rm -rf ~/.kube ~/.minikube || true
                             
-                            # Verify Minikube is running
-                            echo "Checking Minikube status..."
-                            if ! minikube status &> /dev/null; then
-                                echo "Warning: Minikube is not running. Starting Minikube..."
-                                minikube start --memory=8192 --cpus=4 || {
-                                    echo "Failed to start Minikube. Please ensure Minikube is available."
-                                    exit 1
-                                }
-                            fi
-                            
+                            echo "========================================"
+                            echo " Starting fresh Minikube"
+                            echo "========================================"
+                            minikube start \\
+                              --driver=docker \\
+                              --memory=8192 \\
+                              --cpus=4 \\
+                              --addons=default-storageclass,metrics-server \\
+                              --kubernetes-version=v1.28.3 || {
+                                echo "Failed to start Minikube. Please ensure Minikube is available."
+                                minikube status || true
+                                exit 1
+                              }
+
                             # Set kubectl context
                             kubectl config use-context minikube || true
-                            
-                            # Enable metrics-server for HPA
-                            echo "Enabling metrics-server..."
-                            minikube addons enable metrics-server || true
-                            
+
+                            echo "Waiting for Kubernetes API server to be ready..."
+                            READY=0
+                            for i in {1..30}; do
+                              if kubectl get nodes >/dev/null 2>&1; then
+                                echo "Kubernetes API server is ready."
+                                READY=1
+                                break
+                              fi
+                              echo "API server not ready yet (attempt $i/30)..."
+                              sleep 10
+                            done
+
+                            if [ "\$READY" -ne 1 ]; then
+                              echo "ERROR: Kubernetes API server did not become ready in time."
+                              echo "Cluster debug info:"
+                              minikube status || true
+                              kubectl get pods -A || true
+                              exit 1
+                            fi
+
+                            echo "Cluster nodes:"
+                            kubectl get nodes -o wide
+
                             # Verify ansible directory exists
                             if [ ! -d "ansible" ]; then
                                 echo "ERROR: ansible directory not found!"
@@ -221,10 +249,10 @@ pipeline {
                             export DOCKER_PASSWORD=\${DOCKER_PASS}
                             export BUILD_NUMBER=${BUILD_NUMBER}
                             
-                            ansible-playbook -i inventory.ini playbook-with-roles.yaml \
-                                -e "docker_username=\${DOCKER_USER}" \
-                                -e "docker_password=\${DOCKER_PASS}" \
-                                -e "build_number=${BUILD_NUMBER}" \
+                            ansible-playbook -i inventory.ini playbook-with-roles.yaml \\
+                                -e "docker_username=\${DOCKER_USER}" \\
+                                -e "docker_password=\${DOCKER_PASS}" \\
+                                -e "build_number=${BUILD_NUMBER}" \\
                                 -v
                         """
                     }
@@ -265,7 +293,7 @@ pipeline {
                         echo "========================================"
                         echo "📊 HPA Status"
                         echo "========================================"
-                        kubectl get hpa -n bigdata-devops
+                        kubectl get hpa -n bigdata-devops || echo "No HPAs found"
                         
                         echo ""
                         echo "========================================"
