@@ -1,0 +1,54 @@
+---
+- name: Deploy Elasticsearch
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/elasticsearch-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Elasticsearch to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=elasticsearch
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 600
+
+- name: Deploy Logstash
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/logstash-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Logstash to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=logstash
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Deploy Kibana
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/kibana-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Kibana to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=kibana
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300

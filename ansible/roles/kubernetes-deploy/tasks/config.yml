@@ -1,0 +1,36 @@
+---
+- name: Create PersistentVolumeClaims
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/persistent-volumes.yaml') | from_yaml_all }}"
+
+- name: Create ConfigMaps
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/configmap.yaml') | from_yaml_all }}"
+
+- name: Create Secrets
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/secrets.yaml') | from_yaml_all }}"
+
+- name: Create Docker Hub secret
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: dockerhub-secret
+        namespace: "{{ k8s_namespace }}"
+      type: kubernetes.io/dockerconfigjson
+      data:
+        .dockerconfigjson: "{{ dockerconfigjson | b64encode }}"
+  vars:
+    dockerconfigjson: '{"auths":{"https://index.docker.io/v1/":{"username":"{{ docker_username }}","password":"{{ docker_password }}","auth":"{{ (docker_username + ":" + docker_password) | b64encode }}"}}}'
+  when: docker_password != ""
+  no_log: true

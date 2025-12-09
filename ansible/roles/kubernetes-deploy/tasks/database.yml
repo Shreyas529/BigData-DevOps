@@ -1,0 +1,39 @@
+---
+- name: Deploy PostgreSQL
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/postgres-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for PostgreSQL to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=postgres
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Run Database Initialization Job
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
+
+- name: Wait for DB Init Job to complete
+  kubernetes.core.k8s_info:
+    kind: Job
+    namespace: "{{ k8s_namespace }}"
+    name: db-init
+    wait: yes
+    wait_condition:
+      type: Complete
+      status: "True"
+    wait_timeout: 300
+  register: db_init_result
+  until: db_init_result is succeeded
+  retries: 3
+  delay: 10

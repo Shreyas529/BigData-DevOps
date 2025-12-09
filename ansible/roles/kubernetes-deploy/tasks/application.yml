@@ -1,0 +1,60 @@
+---
+- name: Deploy Backend
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/backend-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Backend to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=backend
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Deploy Consumer
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/consumer-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Consumer to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=consumer
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Deploy Frontend
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/frontend-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Frontend to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=frontend
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
+- name: Deploy HPA
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/hpa.yaml') | from_yaml_all }}"

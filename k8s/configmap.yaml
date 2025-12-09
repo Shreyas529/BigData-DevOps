@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: bigdata-devops
+data:
+  ENVIRONMENT: "Production"
+  BACKEND_PORT: "5002"
+  KAFKA_GROUP_ID: "login_consumer_group"
+  LOGSTASH_PORT: "5044"
+  # Elasticsearch configuration
+  ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+  ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+  # Logstash configuration
+  LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: bigdata-devops
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    xpack.monitoring.enabled: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: bigdata-devops
+data:
+  logstash.conf: |
+    input {
+      tcp {
+        port => 5044
+        codec => json
+      }
+      udp {
+        port => 5044
+        codec => json
+      }
+    }
+
+    filter {
+      if [timestamp] {
+        date {
+          match => [ "timestamp", "ISO8601" ]
+          target => "@timestamp"
+        }
+      }
+      
+      if [service] == "backend" {
+        mutate {
+          add_tag => [ "backend", "flask" ]
+        }
+      }
+      
+      if [service] == "consumer" {
+        mutate {
+          add_tag => [ "consumer", "kafka-consumer" ]
+        }
+      }
+      
+      if [event_type] == "login_event" {
+        if [event_data][user_id] {
+          mutate {
+            add_field => { "login_user_id" => "%{[event_data][user_id]}" }
+          }
+        }
+        if [event_data][country] {
+          mutate {
+            add_field => { "login_country" => "%{[event_data][country]}" }
+          }
+        }
+        if [event_data][device] {
+          mutate {
+            add_field => { "login_device" => "%{[event_data][device]}" }
+          }
+        }
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch:9200"]
+        index => "application-logs-%{+YYYY.MM.dd}"
+      }
+      stdout {
+        codec => rubydebug
+      }
+    }

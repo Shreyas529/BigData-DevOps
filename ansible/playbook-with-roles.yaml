@@ -1,0 +1,8 @@
+---
+- name: Deploy BigData-DevOps Application to Minikube (Using Roles)
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  roles:
+    - kubernetes-deploy

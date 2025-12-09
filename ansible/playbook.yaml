@@ -1,0 +1,257 @@
+---
+- name: Deploy BigData-DevOps Application to Minikube
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    k8s_manifests_dir: "../k8s"
+    namespace: "bigdata-devops"
+    docker_username: "{{ lookup('env', 'DOCKER_USERNAME') | default('siddharth194', true) }}"
+    docker_password: "{{ lookup('env', 'DOCKER_PASSWORD') | default('', true) }}"
+    build_number: "{{ lookup('env', 'BUILD_NUMBER') | default('latest', true) }}"
+    
+  tasks:
+    - name: Verify Minikube is running
+      command: minikube status
+      register: minikube_status
+      changed_when: false
+      failed_when: "'Running' not in minikube_status.stdout"
+      
+    - name: Display Minikube status
+      debug:
+        msg: "Minikube is running"
+        
+    - name: Check if metrics-server is enabled
+      command: minikube addons list
+      register: addons_list
+      changed_when: false
+      
+    - name: Enable metrics-server addon for HPA
+      command: minikube addons enable metrics-server
+      when: "'metrics-server: disabled' in addons_list.stdout"
+      
+    - name: Create namespace
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('file', k8s_manifests_dir + '/namespace.yaml') | from_yaml }}"
+        
+    - name: Create PersistentVolumeClaims
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/persistent-volumes.yaml') | from_yaml_all }}"
+        
+    - name: Create ConfigMaps
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/configmap.yaml') | from_yaml_all }}"
+        
+    - name: Create Secrets
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/secrets.yaml') | from_yaml_all }}"
+        
+    - name: Create Docker Hub secret (if credentials provided)
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: dockerhub-secret
+            namespace: "{{ namespace }}"
+          type: kubernetes.io/dockerconfigjson
+          data:
+            .dockerconfigjson: "{{ dockerconfigjson | b64encode }}"
+      vars:
+        dockerconfigjson: '{"auths":{"https://index.docker.io/v1/":{"username":"{{ docker_username }}","password":"{{ docker_password }}","auth":"{{ (docker_username + ":" + docker_password) | b64encode }}"}}}'
+      when: docker_password != ""
+      no_log: true
+      
+    - name: Deploy Zookeeper
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/zookeeper-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for Zookeeper to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=zookeeper
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        
+    - name: Deploy Kafka
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/kafka-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for Kafka to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=kafka
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        
+    - name: Deploy PostgreSQL
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/postgres-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for PostgreSQL to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=postgres
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        
+    - name: Deploy Elasticsearch
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/elasticsearch-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for Elasticsearch to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=elasticsearch
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 600
+        
+    - name: Deploy Logstash
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/logstash-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for Logstash to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=logstash
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        
+    - name: Deploy Kibana
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/kibana-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Run Database Initialization Job
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
+        
+    - name: Wait for DB Init Job to complete
+      kubernetes.core.k8s_info:
+        kind: Job
+        namespace: "{{ namespace }}"
+        name: db-init
+        wait: yes
+        wait_condition:
+          type: Complete
+          status: "True"
+        wait_timeout: 300
+      register: db_init_result
+      until: db_init_result is succeeded
+      retries: 3
+      delay: 10
+      
+    - name: Deploy Backend
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/backend-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for Backend to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=backend
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        
+    - name: Deploy Consumer
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/consumer-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Deploy Frontend
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/frontend-deployment.yaml') | from_yaml_all }}"
+        
+    - name: Wait for Frontend to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=frontend
+        wait: yes
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        
+    - name: Deploy HPA (Horizontal Pod Autoscalers)
+      kubernetes.core.k8s:
+        state: present
+        namespace: "{{ namespace }}"
+        definition: "{{ lookup('file', k8s_manifests_dir + '/hpa.yaml') | from_yaml_all }}"
+        
+    - name: Get Frontend Service URL
+      command: minikube service frontend -n {{ namespace }} --url
+      register: frontend_url
+      changed_when: false
+      
+    - name: Get Kibana Service URL
+      command: minikube service kibana -n {{ namespace }} --url
+      register: kibana_url
+      changed_when: false
+      
+    - name: Display Service URLs
+      debug:
+        msg:
+          - "=== Deployment Complete ==="
+          - "Frontend URL: {{ frontend_url.stdout }}"
+          - "Kibana URL: {{ kibana_url.stdout }}"
+          - "Use 'kubectl get pods -n {{ namespace }}' to check pod status"
+          - "Use 'kubectl get hpa -n {{ namespace }}' to check autoscaling status"

@@ -1,0 +1,6 @@
+---
+k8s_namespace: bigdata-devops
+k8s_manifests_dir: "../../../../k8s"
+docker_username: "{{ lookup('env', 'DOCKER_USERNAME') | default('siddharth194', true) }}"
+docker_password: "{{ lookup('env', 'DOCKER_PASSWORD') | default('', true) }}"
+build_number: "{{ lookup('env', 'BUILD_NUMBER') | default('latest', true) }}"

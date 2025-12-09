@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bigdata-devops
+  labels:
+    name: bigdata-devops
+    environment: production

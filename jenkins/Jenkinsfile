@@ -1,6 +1,13 @@
 pipeline {
     agent any
     
+    triggers {
+        // Poll SCM every 5 minutes for changes
+        pollSCM('H/5 * * * *')
+        // Or use GitHub webhook (recommended)
+        // githubPush()
+    }
+    
     environment {
         DOCKER_HUB_CREDENTIALS = 'dockerhub-credentials'
         IMAGE_NAME = 'siddharth194/bigdata-devops'
@@ -99,6 +106,101 @@ pipeline {
                     sh """
                         docker pull ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}
                         docker pull ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}
+                    """
+                }
+            }
+        }
+
+        stage('Update Kubernetes Manifests') {
+            steps {
+                script {
+                    sh """
+                        # Update image tags in Kubernetes manifests
+                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-.*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/backend-deployment.yaml
+                        sed -i 's|image: ${IMAGE_NAME}:${FRONTEND_TAG}-.*|image: ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}|g' k8s/frontend-deployment.yaml
+                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-.*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/consumer-deployment.yaml
+                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-.*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/db-init-job.yaml
+                        
+                        echo "Updated manifests with build number: ${BUILD_NUMBER}"
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Minikube via Ansible') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: DOCKER_HUB_CREDENTIALS,
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            # Check if Ansible is installed
+                            if ! command -v ansible-playbook &> /dev/null; then
+                                echo "Installing Ansible..."
+                                pip3 install ansible
+                            fi
+                            
+                            # Install Kubernetes Ansible collection
+                            ansible-galaxy collection install kubernetes.core --force || true
+                            
+                            # Install Python Kubernetes client
+                            pip3 install kubernetes openshift || true
+                            
+                            # Verify Minikube is running
+                            if ! minikube status &> /dev/null; then
+                                echo "Warning: Minikube is not running. Starting Minikube..."
+                                minikube start --memory=8192 --cpus=4 || {
+                                    echo "Failed to start Minikube. Please ensure Minikube is available."
+                                    exit 1
+                                }
+                            fi
+                            
+                            # Set kubectl context
+                            kubectl config use-context minikube || true
+                            
+                            # Run Ansible playbook
+                            cd ansible
+                            export DOCKER_USERNAME=\${DOCKER_USER}
+                            export DOCKER_PASSWORD=\${DOCKER_PASS}
+                            export BUILD_NUMBER=${BUILD_NUMBER}
+                            
+                            ansible-playbook -i inventory.ini playbook-with-roles.yaml \
+                                -e "docker_username=\${DOCKER_USER}" \
+                                -e "docker_password=\${DOCKER_PASS}" \
+                                -e "build_number=${BUILD_NUMBER}" \
+                                -v
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    sh """
+                        echo "Verifying deployment..."
+                        
+                        # Wait for pods to be ready
+                        kubectl wait --for=condition=ready pod -l app=backend -n bigdata-devops --timeout=300s || true
+                        kubectl wait --for=condition=ready pod -l app=frontend -n bigdata-devops --timeout=300s || true
+                        
+                        # Show deployment status
+                        echo "=== Pods Status ==="
+                        kubectl get pods -n bigdata-devops
+                        
+                        echo "=== Services Status ==="
+                        kubectl get svc -n bigdata-devops
+                        
+                        echo "=== HPA Status ==="
+                        kubectl get hpa -n bigdata-devops
+                        
+                        # Get service URLs
+                        echo "=== Service URLs ==="
+                        minikube service frontend -n bigdata-devops --url || echo "Frontend service not ready"
+                        minikube service kibana -n bigdata-devops --url || echo "Kibana service not ready"
                     """
                 }
             }
@@ -216,10 +318,30 @@ pipeline {
             }
         }
         success {
-            echo 'All tests passed successfully!'
+            echo '================================================'
+            echo '  Pipeline completed successfully!'
+            echo '================================================'
+            echo 'Build Number: ' + env.BUILD_NUMBER
+            echo 'Images pushed to DockerHub:'
+            echo "  - ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}"
+            echo "  - ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}"
+            echo 'Deployed to Minikube namespace: bigdata-devops'
+            echo '================================================'
+            
+            // Get deployment URLs
+            sh '''
+                echo "Access your application:"
+                echo "Frontend: $(minikube service frontend -n bigdata-devops --url 2>/dev/null || echo 'Not available')"
+                echo "Kibana: $(minikube service kibana -n bigdata-devops --url 2>/dev/null || echo 'Not available')"
+            ''' 
         }
         failure {
-            echo 'Tests failed!'
+            echo '================================================'
+            echo '  Pipeline failed!'
+            echo '================================================'
+            echo 'Check the logs above for error details.'
+            echo 'Build Number: ' + env.BUILD_NUMBER
+            echo '================================================'
         }
     }
 }

@@ -1,0 +1,28 @@
+---
+- name: Get Frontend Service URL
+  command: minikube service frontend -n {{ k8s_namespace }} --url
+  register: frontend_url
+  changed_when: false
+  failed_when: false
+
+- name: Get Kibana Service URL
+  command: minikube service kibana -n {{ k8s_namespace }} --url
+  register: kibana_url
+  changed_when: false
+  failed_when: false
+
+- name: Display deployment summary
+  debug:
+    msg:
+      - "============================================"
+      - "  Deployment Complete!"
+      - "============================================"
+      - "Frontend URL: {{ frontend_url.stdout | default('Not available') }}"
+      - "Kibana URL: {{ kibana_url.stdout | default('Not available') }}"
+      - ""
+      - "Useful Commands:"
+      - "  kubectl get pods -n {{ k8s_namespace }}"
+      - "  kubectl get svc -n {{ k8s_namespace }}"
+      - "  kubectl get hpa -n {{ k8s_namespace }}"
+      - "  kubectl logs -n {{ k8s_namespace }} <pod-name>"
+      - "============================================"

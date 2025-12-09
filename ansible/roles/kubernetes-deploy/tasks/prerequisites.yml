@@ -1,0 +1,16 @@
+---
+- name: Verify Minikube is running
+  command: minikube status
+  register: minikube_status
+  changed_when: false
+  failed_when: "'Running' not in minikube_status.stdout"
+
+- name: Enable metrics-server addon
+  command: minikube addons enable metrics-server
+  register: metrics_result
+  changed_when: "'metrics-server was successfully enabled' in metrics_result.stdout"
+
+- name: Create namespace
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('file', k8s_manifests_dir + '/namespace.yaml') | from_yaml }}"

@@ -1,0 +1,21 @@
+---
+- name: Setup prerequisites
+  include_tasks: prerequisites.yml
+
+- name: Deploy configuration
+  include_tasks: config.yml
+
+- name: Deploy messaging infrastructure
+  include_tasks: messaging.yml
+
+- name: Deploy database
+  include_tasks: database.yml
+
+- name: Deploy ELK Stack
+  include_tasks: elk.yml
+
+- name: Deploy application services
+  include_tasks: application.yml
+
+- name: Get service URLs
+  include_tasks: get_urls.yml

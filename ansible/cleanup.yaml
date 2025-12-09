@@ -1,0 +1,39 @@
+---
+- name: Cleanup BigData-DevOps Deployment from Minikube
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    namespace: "bigdata-devops"
+    
+  tasks:
+    - name: Delete namespace (this will delete all resources in the namespace)
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ namespace }}"
+      ignore_errors: yes
+      
+    - name: Wait for namespace deletion
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Namespace
+        name: "{{ namespace }}"
+      register: namespace_info
+      until: namespace_info.resources | length == 0
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+      
+    - name: Display cleanup complete message
+      debug:
+        msg:
+          - "============================================"
+          - "  Cleanup Complete!"
+          - "============================================"
+          - "All resources in namespace '{{ namespace }}' have been deleted."
+          - ""
+          - "To verify: kubectl get all -n {{ namespace }}"
+          - "============================================"

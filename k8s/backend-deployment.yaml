@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: bigdata-devops
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z kafka 9092; do echo waiting for kafka; sleep 2; done;']
+      - name: wait-for-logstash
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z logstash 5044; do echo waiting for logstash; sleep 2; done;']
+      containers:
+      - name: backend
+        image: siddharth194/bigdata-devops:backend-latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5002
+          name: http
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            secretKeyRef:
+              name: kafka-secret
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: KAFKA_TOPIC
+          valueFrom:
+            secretKeyRef:
+              name: kafka-secret
+              key: KAFKA_TOPIC
+        - name: BACKEND_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: BACKEND_PORT
+        - name: LOGSTASH_HOST
+          value: "logstash"
+        - name: LOGSTASH_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: LOGSTASH_PORT
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: bigdata-devops
+  labels:
+    app: backend
+spec:
+  ports:
+  - port: 5002
+    targetPort: 5002
+    name: http
+  selector:
+    app: backend
+  type: ClusterIP
