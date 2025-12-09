@@ -155,7 +155,7 @@
       kubernetes.core.k8s:
         state: present
         namespace: "{{ namespace }}"
-        definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
+        definition: "{{ lookup('template', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
         
     - name: Wait for DB Init Job to complete
       kubernetes.core.k8s_info:
