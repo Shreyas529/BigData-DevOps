@@ -20,7 +20,7 @@ spec:
         command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
       containers:
       - name: db-init
-        image: siddharth194/bigdata-devops:backend-0
+        image: siddharth194/bigdata-devops:backend-29
         imagePullPolicy: Always
         command: ["python", "-u", "db_init.py"]
         env:

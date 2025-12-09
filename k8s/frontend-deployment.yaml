@@ -21,7 +21,7 @@ spec:
         command: ['sh', '-c', 'until nc -z backend 5002; do echo waiting for backend; sleep 2; done;']
       containers:
       - name: frontend
-        image: siddharth194/bigdata-devops:frontend-latest
+        image: siddharth194/bigdata-devops:frontend-0
         imagePullPolicy: Always
         ports:
         - containerPort: 8501

@@ -27,7 +27,7 @@ spec:
         command: ['sh', '-c', 'until nc -z logstash 5044; do echo waiting for logstash; sleep 2; done;']
       containers:
       - name: consumer
-        image: siddharth194/bigdata-devops:backend-latest
+        image: siddharth194/bigdata-devops:backend-0
         imagePullPolicy: Always
         command: ["python", "-u", "consumer.py"]
         env:
