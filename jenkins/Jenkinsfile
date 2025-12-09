@@ -20,11 +20,11 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        # stop compose project and prune system state
+                        # Stop compose project and prune system state
                         docker-compose -p test down -v || true
                         docker system prune -af || true
 
-                        echo "Removing old images for ${IMAGE_NAME} (frontend/backed tags)..."
+                        echo "Removing old images for ${IMAGE_NAME} (frontend/backend tags)..."
 
                         # Remove previous frontend images: ${IMAGE_NAME}:frontend-*
                         docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
@@ -45,9 +45,17 @@ pipeline {
         
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/Shreyas529/BigData-DevOps.git',
-                    credentialsId: 'github-creds'
+                checkout scm
+                script {
+                    // Print current directory and list files
+                    sh '''
+                        echo "Current directory: $(pwd)"
+                        echo "Files in workspace:"
+                        ls -la
+                        echo "Files in k8s directory:"
+                        ls -la k8s/ || echo "k8s directory not found"
+                    '''
+                }
             }
         }
 
@@ -56,7 +64,7 @@ pipeline {
                 script {
                     sh '''
                         docker-compose -f docker-compose.test.yml \
-                            --project-name test \
+                            -p test \
                             up --build --abort-on-container-exit --exit-code-from test_runner
                     '''
                 }
@@ -85,8 +93,9 @@ pipeline {
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
-
                         sh """
+                            echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
+                            
                             echo "Pushing Frontend Image..."
                             docker push ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}
 
@@ -115,13 +124,35 @@ pipeline {
             steps {
                 script {
                     sh """
+                        # Verify we're in the right directory
+                        echo "Current working directory: \$(pwd)"
+                        echo "Checking for k8s directory..."
+                        
+                        if [ ! -d "k8s" ]; then
+                            echo "ERROR: k8s directory not found!"
+                            echo "Contents of current directory:"
+                            ls -la
+                            exit 1
+                        fi
+                        
                         # Update image tags in Kubernetes manifests
-                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-.*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/backend-deployment.yaml
-                        sed -i 's|image: ${IMAGE_NAME}:${FRONTEND_TAG}-.*|image: ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}|g' k8s/frontend-deployment.yaml
-                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-.*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/consumer-deployment.yaml
-                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-.*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/db-init-job.yaml
+                        echo "Updating backend-deployment.yaml..."
+                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-[0-9]*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/backend-deployment.yaml
+                        
+                        echo "Updating frontend-deployment.yaml..."
+                        sed -i 's|image: ${IMAGE_NAME}:${FRONTEND_TAG}-[0-9]*|image: ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}|g' k8s/frontend-deployment.yaml
+                        
+                        echo "Updating consumer-deployment.yaml..."
+                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-[0-9]*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/consumer-deployment.yaml
+                        
+                        echo "Updating db-init-job.yaml..."
+                        sed -i 's|image: ${IMAGE_NAME}:${BACKEND_TAG}-[0-9]*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g' k8s/db-init-job.yaml
                         
                         echo "Updated manifests with build number: ${BUILD_NUMBER}"
+                        
+                        # Show what changed
+                        echo "=== Verification: Image tags in manifests ==="
+                        grep -n "image:" k8s/backend-deployment.yaml k8s/frontend-deployment.yaml k8s/consumer-deployment.yaml k8s/db-init-job.yaml || true
                     """
                 }
             }
@@ -143,12 +174,15 @@ pipeline {
                             fi
                             
                             # Install Kubernetes Ansible collection
+                            echo "Installing Kubernetes collection..."
                             ansible-galaxy collection install kubernetes.core --force || true
                             
                             # Install Python Kubernetes client
+                            echo "Installing Python Kubernetes client..."
                             pip3 install kubernetes openshift || true
                             
                             # Verify Minikube is running
+                            echo "Checking Minikube status..."
                             if ! minikube status &> /dev/null; then
                                 echo "Warning: Minikube is not running. Starting Minikube..."
                                 minikube start --memory=8192 --cpus=4 || {
@@ -160,8 +194,29 @@ pipeline {
                             # Set kubectl context
                             kubectl config use-context minikube || true
                             
+                            # Enable metrics-server for HPA
+                            echo "Enabling metrics-server..."
+                            minikube addons enable metrics-server || true
+                            
+                            # Verify ansible directory exists
+                            if [ ! -d "ansible" ]; then
+                                echo "ERROR: ansible directory not found!"
+                                echo "Current directory: \$(pwd)"
+                                ls -la
+                                exit 1
+                            fi
+                            
                             # Run Ansible playbook
+                            echo "Running Ansible playbook..."
                             cd ansible
+                            
+                            # Verify playbook exists
+                            if [ ! -f "playbook-with-roles.yaml" ]; then
+                                echo "ERROR: playbook-with-roles.yaml not found!"
+                                ls -la
+                                exit 1
+                            fi
+                            
                             export DOCKER_USERNAME=\${DOCKER_USER}
                             export DOCKER_PASSWORD=\${DOCKER_PASS}
                             export BUILD_NUMBER=${BUILD_NUMBER}
@@ -181,133 +236,61 @@ pipeline {
             steps {
                 script {
                     sh """
-                        echo "Verifying deployment..."
+                        echo "========================================"
+                        echo "  Verifying Deployment to Minikube"
+                        echo "========================================"
                         
                         # Wait for pods to be ready
-                        kubectl wait --for=condition=ready pod -l app=backend -n bigdata-devops --timeout=300s || true
-                        kubectl wait --for=condition=ready pod -l app=frontend -n bigdata-devops --timeout=300s || true
+                        echo ""
+                        echo "⏳ Waiting for backend pods..."
+                        kubectl wait --for=condition=ready pod -l app=backend -n bigdata-devops --timeout=300s || echo "Backend pods not ready yet"
                         
-                        # Show deployment status
-                        echo "=== Pods Status ==="
-                        kubectl get pods -n bigdata-devops
+                        echo ""
+                        echo "⏳ Waiting for frontend pods..."
+                        kubectl wait --for=condition=ready pod -l app=frontend -n bigdata-devops --timeout=300s || echo "Frontend pods not ready yet"
                         
-                        echo "=== Services Status ==="
+                        echo ""
+                        echo "========================================"
+                        echo "📦 Pods Status"
+                        echo "========================================"
+                        kubectl get pods -n bigdata-devops -o wide
+                        
+                        echo ""
+                        echo "========================================"
+                        echo "🌐 Services Status"
+                        echo "========================================"
                         kubectl get svc -n bigdata-devops
                         
-                        echo "=== HPA Status ==="
+                        echo ""
+                        echo "========================================"
+                        echo "📊 HPA Status"
+                        echo "========================================"
                         kubectl get hpa -n bigdata-devops
                         
-                        # Get service URLs
-                        echo "=== Service URLs ==="
-                        minikube service frontend -n bigdata-devops --url || echo "Frontend service not ready"
-                        minikube service kibana -n bigdata-devops --url || echo "Kibana service not ready"
+                        echo ""
+                        echo "========================================"
+                        echo "🚀 Deployments Status"
+                        echo "========================================"
+                        kubectl get deployments -n bigdata-devops
+                        
+                        echo ""
+                        echo "========================================"
+                        echo "🔗 Service URLs"
+                        echo "========================================"
+                        echo "Frontend URL:"
+                        minikube service frontend -n bigdata-devops --url || echo "⚠️  Frontend service not ready"
+                        
+                        echo ""
+                        echo "Kibana URL:"
+                        minikube service kibana -n bigdata-devops --url || echo "⚠️  Kibana service not ready"
+                        
+                        echo ""
+                        echo "========================================"
                     """
                 }
             }
         }
     }
-        
-    //     stage('Start Test Infrastructure') {
-    //         steps {
-    //             script {
-    //                 sh '''
-    //                     # Start services with project-specific names
-    //                     docker-compose -p ${COMPOSE_PROJECT_NAME} up -d postgres zookeeper kafka
-                        
-    //                     # Get the actual postgres container name
-    //                     POSTGRES_CONTAINER=$(docker-compose -p ${COMPOSE_PROJECT_NAME} ps -q postgres)
-    //                     echo "PostgreSQL container ID: ${POSTGRES_CONTAINER}"
-                        
-    //                     # Wait for PostgreSQL using container ID
-    //                     echo "Waiting for PostgreSQL..."
-    //                     timeout 60 bash -c "until docker exec ${POSTGRES_CONTAINER} pg_isready -U postgres; do sleep 2; done"
-                        
-    //                     # Wait for Kafka
-    //                     echo "Waiting for Kafka..."
-    //                     sleep 15
-    //                 '''
-    //             }
-    //         }
-    //     }
-        
-    //     stage('Initialize Database') {
-    //         steps {
-    //             script {
-    //                 // Use service name 'postgres' which works within docker network
-    //                 sh '''
-    //                     docker run --rm \
-    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
-    //                         -e POSTGRES_HOST=postgres \
-    //                         -e POSTGRES_PORT=5432 \
-    //                         -e POSTGRES_DB=logindata \
-    //                         -e POSTGRES_USER=postgres \
-    //                         -e POSTGRES_PASSWORD=pwd \
-    //                         netflix-backend:${BUILD_NUMBER} \
-    //                         python db_init.py
-    //                 '''
-    //             }
-    //         }
-    //     }
-        
-    //     stage('Run Tests') {
-    //         steps {
-    //             script {
-    //                 // Use service name 'postgres' which works within docker network
-    //                 sh '''
-    //                     docker run --rm \
-    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
-    //                         -e POSTGRES_HOST=postgres \
-    //                         -e POSTGRES_PORT=5432 \
-    //                         -e POSTGRES_DB=logindata \
-    //                         -e POSTGRES_USER=postgres \
-    //                         -e POSTGRES_PASSWORD=pwd \
-    //                         netflix-tests:${BUILD_NUMBER}
-    //                 '''
-    //             }
-    //         }
-    //     }
-        
-    //     stage('Integration Test') {
-    //         steps {
-    //             script {
-    //                 // Use service names 'kafka' and 'postgres' which work within docker network
-    //                 sh '''
-    //                     # Start backend with unique name
-    //                     docker run -d --name backend-${BUILD_NUMBER} \
-    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
-    //                         -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
-    //                         -e KAFKA_TOPIC=login_events \
-    //                         -e BACKEND_PORT=5002 \
-    //                         -p 5002:5002 \
-    //                         netflix-backend:${BUILD_NUMBER}
-                        
-    //                     # Start consumer with unique name
-    //                     docker run -d --name consumer-${BUILD_NUMBER} \
-    //                         --network ${COMPOSE_PROJECT_NAME}_devops-net \
-    //                         -e KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
-    //                         -e KAFKA_TOPIC=login_events \
-    //                         -e KAFKA_GROUP_ID=login_consumer_group \
-    //                         -e POSTGRES_HOST=postgres \
-    //                         -e POSTGRES_PORT=5432 \
-    //                         -e POSTGRES_DB=logindata \
-    //                         -e POSTGRES_USER=postgres \
-    //                         -e POSTGRES_PASSWORD=pwd \
-    //                         netflix-backend:${BUILD_NUMBER} \
-    //                         python consumer.py
-                        
-    //                     # Wait for services to be ready
-    //                     sleep 10
-                        
-    //                     # Test backend health
-    //                     curl -f http://localhost:5002/health || exit 1
-                        
-    //                     # Verify Kafka connection
-    //                     docker logs backend-${BUILD_NUMBER} | grep -i "kafka" || true
-    //                 '''
-    //             }
-    //         }
-    //     }
-    // }
     
     post {
         always {
@@ -319,29 +302,73 @@ pipeline {
         }
         success {
             echo '================================================'
-            echo '  Pipeline completed successfully!'
+            echo '  ✅ Pipeline completed successfully!'
             echo '================================================'
-            echo 'Build Number: ' + env.BUILD_NUMBER
+            echo "Build Number: ${BUILD_NUMBER}"
             echo 'Images pushed to DockerHub:'
             echo "  - ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}"
             echo "  - ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}"
             echo 'Deployed to Minikube namespace: bigdata-devops'
             echo '================================================'
             
-            // Get deployment URLs
-            sh '''
-                echo "Access your application:"
-                echo "Frontend: $(minikube service frontend -n bigdata-devops --url 2>/dev/null || echo 'Not available')"
-                echo "Kibana: $(minikube service kibana -n bigdata-devops --url 2>/dev/null || echo 'Not available')"
-            ''' 
+            script {
+                sh '''
+                    echo ""
+                    echo "🌐 Access your application:"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    
+                    FRONTEND_URL=$(minikube service frontend -n bigdata-devops --url 2>/dev/null || echo 'Not available')
+                    KIBANA_URL=$(minikube service kibana -n bigdata-devops --url 2>/dev/null || echo 'Not available')
+                    
+                    echo "📊 Frontend: ${FRONTEND_URL}"
+                    echo "📈 Kibana:   ${KIBANA_URL}"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    
+                    # Show pod status
+                    echo ""
+                    echo "📦 Running Pods:"
+                    kubectl get pods -n bigdata-devops --no-headers | awk '{print "  - " $1 " (" $3 ")"}'
+                ''' 
+            }
         }
         failure {
             echo '================================================'
-            echo '  Pipeline failed!'
+            echo '  ❌ Pipeline failed!'
             echo '================================================'
             echo 'Check the logs above for error details.'
-            echo 'Build Number: ' + env.BUILD_NUMBER
+            echo "Build Number: ${BUILD_NUMBER}"
             echo '================================================'
+            
+            script {
+                sh '''
+                    echo ""
+                    echo "🔍 Debugging information:"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    
+                    echo "Current directory: $(pwd)"
+                    echo ""
+                    
+                    echo "Docker version:"
+                    docker --version || echo "Docker not available"
+                    echo ""
+                    
+                    echo "Docker Compose version:"
+                    docker-compose --version || echo "Docker Compose not available"
+                    echo ""
+                    
+                    echo "Kubectl version:"
+                    kubectl version --client --short || echo "Kubectl not available"
+                    echo ""
+                    
+                    echo "Minikube status:"
+                    minikube status || echo "Minikube not available"
+                    echo ""
+                    
+                    echo "Files in workspace:"
+                    ls -la
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                ''' 
+            }
         }
     }
 }
