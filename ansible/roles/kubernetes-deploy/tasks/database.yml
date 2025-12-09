@@ -17,6 +17,20 @@
       status: "True"
     wait_timeout: 300
 
+- name: Delete existing DB Init Job (if any)
+  kubernetes.core.k8s:
+    state: absent
+    api_version: batch/v1
+    kind: Job
+    namespace: "{{ k8s_namespace }}"
+    name: db-init
+  ignore_errors: yes
+
+- name: Wait for job pods to be cleaned up
+  shell: |
+    minikube kubectl -- delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true
+  ignore_errors: yes
+
 - name: Run Database Initialization Job
   kubernetes.core.k8s:
     state: present
