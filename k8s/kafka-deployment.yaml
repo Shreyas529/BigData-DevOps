@@ -43,25 +43,26 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "1000m"
-        livenessProbe:
-          exec:
-            command:
-            - sh
-            - -c
-            - "kafka-broker-api-versions --bootstrap-server=localhost:9092"
-          initialDelaySeconds: 90
+        startupProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 30
           periodSeconds: 10
-          timeoutSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        livenessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
-          exec:
-            command:
-            - sh
-            - -c
-            - "kafka-broker-api-versions --bootstrap-server=localhost:9092"
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          timeoutSeconds: 10
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
           failureThreshold: 3
 ---
 apiVersion: v1
