@@ -9,7 +9,7 @@ pipeline {
     }
     
     environment {
-        DOCKER_HUB_CREDENTIALS = 'dockerhub-creds'
+        DOCKER_HUB_CREDENTIALS = 'dockerhub-credentials'
         IMAGE_NAME = 'siddharth194/bigdata-devops'
         BACKEND_TAG = 'backend'
         FRONTEND_TAG = 'frontend'
@@ -21,7 +21,7 @@ pipeline {
                 script {
                     sh '''
                         # Stop compose project and prune test state
-                        docker-compose -p test down -v || true
+                        docker compose -p test down -v || true
 
                         echo "Removing old images for ${IMAGE_NAME} (frontend/backend tags)..."
 
@@ -339,7 +339,7 @@ pipeline {
         always {
             script {
                 sh '''
-                    docker-compose -p test down -v || true
+                    docker compose -p test down -v || true
                 '''
             }
         }
@@ -396,7 +396,7 @@ pipeline {
                     echo ""
                     
                     echo "Docker Compose version:"
-                    docker-compose --version || echo "Docker Compose not available"
+                    docker compose --version || echo "Docker Compose not available"
                     echo ""
                     
                     echo "Kubectl version:"
