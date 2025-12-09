@@ -8,14 +8,14 @@
 - name: Check Zookeeper pod status
   shell: |
     echo "Checking Zookeeper pods..."
-    kubectl get pods -n {{ k8s_namespace }} -l app=zookeeper
-    kubectl describe pods -n {{ k8s_namespace }} -l app=zookeeper | tail -20
+    minikube kubectl -- get pods -n {{ k8s_namespace }} -l app=zookeeper
+    minikube kubectl -- describe pods -n {{ k8s_namespace }} -l app=zookeeper | tail -20
   register: zookeeper_debug
   changed_when: false
 
 - name: Wait for Zookeeper deployment
   shell: |
-    kubectl rollout status deployment/zookeeper -n {{ k8s_namespace }} --timeout=180s
+    minikube kubectl -- rollout status deployment/zookeeper -n {{ k8s_namespace }} --timeout=180s
   register: zookeeper_status
   retries: 1
   delay: 5
@@ -31,14 +31,14 @@
 - name: Check Kafka pod status
   shell: |
     echo "Checking Kafka pods..."
-    kubectl get pods -n {{ k8s_namespace }} -l app=kafka
-    kubectl describe pods -n {{ k8s_namespace }} -l app=kafka | tail -30
+    minikube kubectl -- get pods -n {{ k8s_namespace }} -l app=kafka
+    minikube kubectl -- describe pods -n {{ k8s_namespace }} -l app=kafka | tail -30
   register: kafka_debug
   changed_when: false
 
 - name: Wait for Kafka deployment (non-blocking)
   shell: |
-    kubectl rollout status deployment/kafka -n {{ k8s_namespace }} --timeout=120s || exit 0
+    minikube kubectl -- rollout status deployment/kafka -n {{ k8s_namespace }} --timeout=120s || exit 0
   register: kafka_status
   changed_when: false
 
