@@ -6,16 +6,20 @@
     definition: "{{ lookup('file', k8s_manifests_dir + '/postgres-deployment.yaml') | from_yaml_all }}"
 
 - name: Wait for PostgreSQL to be ready
-  kubernetes.core.k8s_info:
-    kind: Pod
-    namespace: "{{ k8s_namespace }}"
-    label_selectors:
-      - app=postgres
-    wait: yes
-    wait_condition:
-      type: Ready
-      status: "True"
-    wait_timeout: 300
+  shell: |
+    minikube kubectl -- wait --for=condition=ready pod -l app=postgres -n {{ k8s_namespace }} --timeout=180s
+  register: postgres_ready
+  retries: 3
+  delay: 10
+  until: postgres_ready.rc == 0
+
+- name: Verify PostgreSQL is accepting connections
+  shell: |
+    minikube kubectl -- exec -n {{ k8s_namespace }} deploy/postgres -- pg_isready -U postgres -d logindata
+  register: pg_isready
+  retries: 10
+  delay: 5
+  until: pg_isready.rc == 0
 
 - name: Delete existing DB Init Job (if any)
   kubernetes.core.k8s:
@@ -37,12 +41,16 @@
     namespace: "{{ k8s_namespace }}"
     definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
 
+- name: Wait for job to be created
+  pause:
+    seconds: 5
+
 - name: Wait for DB Init Job to complete
   shell: |
     minikube kubectl -- wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
   register: db_init_result
   retries: 3
-  delay: 10
+  delay: 15
   until: db_init_result.rc == 0
 
 - name: Check DB Init Job status

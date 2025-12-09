@@ -6,7 +6,7 @@ metadata:
   labels:
     app: db-init
 spec:
-  ttlSecondsAfterFinished: 30
+  ttlSecondsAfterFinished: 600
   backoffLimit: 5
   template:
     metadata:
