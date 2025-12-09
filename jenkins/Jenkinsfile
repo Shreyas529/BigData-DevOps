@@ -247,12 +247,12 @@ pipeline {
                             
                             export DOCKER_USERNAME=\${DOCKER_USER}
                             export DOCKER_PASSWORD=\${DOCKER_PASS}
-                            export BUILD_NUMBER=${BUILD_NUMBER}
+                            export BUILD_NUMBER=\${BUILD_NUMBER}
                             
                             ansible-playbook -i inventory.ini playbook-with-roles.yaml \\
                                 -e "docker_username=\${DOCKER_USER}" \\
                                 -e "docker_password=\${DOCKER_PASS}" \\
-                                -e "build_number=${BUILD_NUMBER}" \\
+                                -e "build_number=\${BUILD_NUMBER}" \\
                                 -v
                         """
                     }
