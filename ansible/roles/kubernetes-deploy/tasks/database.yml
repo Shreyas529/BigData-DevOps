@@ -38,16 +38,19 @@
     definition: "{{ lookup('file', k8s_manifests_dir + '/db-init-job.yaml') | from_yaml }}"
 
 - name: Wait for DB Init Job to complete
-  kubernetes.core.k8s_info:
-    kind: Job
-    namespace: "{{ k8s_namespace }}"
-    name: db-init
-    wait: yes
-    wait_condition:
-      type: Complete
-      status: "True"
-    wait_timeout: 300
+  shell: |
+    minikube kubectl -- wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
   register: db_init_result
-  until: db_init_result is succeeded
   retries: 3
   delay: 10
+  until: db_init_result.rc == 0
+
+- name: Check DB Init Job status
+  shell: |
+    minikube kubectl -- get jobs db-init -n {{ k8s_namespace }}
+  register: job_status
+  changed_when: false
+
+- name: Display DB Init Job status
+  debug:
+    msg: "{{ job_status.stdout_lines }}"
