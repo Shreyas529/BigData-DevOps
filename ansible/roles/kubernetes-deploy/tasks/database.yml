@@ -7,7 +7,7 @@
 
 - name: Wait for PostgreSQL to be ready
   shell: |
-    minikube kubectl -- wait --for=condition=ready pod -l app=postgres -n {{ k8s_namespace }} --timeout=180s
+    kubectl wait --for=condition=ready pod -l app=postgres -n {{ k8s_namespace }} --timeout=180s
   register: postgres_ready
   retries: 3
   delay: 10
@@ -15,7 +15,7 @@
 
 - name: Verify PostgreSQL is accepting connections
   shell: |
-    minikube kubectl -- exec -n {{ k8s_namespace }} deploy/postgres -- pg_isready -U postgres -d logindata
+    kubectl exec -n {{ k8s_namespace }} deploy/postgres -- pg_isready -U postgres -d logindata
   register: pg_isready
   retries: 10
   delay: 5
@@ -32,7 +32,7 @@
 
 - name: Wait for job pods to be cleaned up
   shell: |
-    minikube kubectl -- delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true --wait=true
+    kubectl delete pods -n {{ k8s_namespace }} -l app=db-init --ignore-not-found=true --wait=true
   ignore_errors: true
 
 - name: Pause to ensure cleanup
@@ -48,7 +48,7 @@
 - name: Wait for job pod to be created
   shell: |
     for i in {1..30}; do
-      POD=$(minikube kubectl -- get pods -n {{ k8s_namespace }} -l app=db-init -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+      POD=$(kubectl get pods -n {{ k8s_namespace }} -l app=db-init -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
       if [ ! -z "$POD" ]; then
         echo "Job pod created: $POD"
         exit 0
@@ -62,7 +62,7 @@
 
 - name: Wait for DB Init Job to complete
   shell: |
-    minikube kubectl -- wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
+    kubectl wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
   register: db_init_result
   retries: 3
   delay: 15
@@ -70,7 +70,7 @@
 
 - name: Check DB Init Job status
   shell: |
-    minikube kubectl -- get jobs db-init -n {{ k8s_namespace }}
+    kubectl get jobs db-init -n {{ k8s_namespace }}
   register: job_status
   changed_when: false
 

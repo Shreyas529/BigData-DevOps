@@ -1,7 +1,7 @@
 ---
 - name: Get Frontend Service NodePort
   shell: |
-    minikube kubectl -- get svc frontend -n {{ k8s_namespace }} -o jsonpath='{.spec.ports[0].nodePort}'
+    kubectl get svc frontend -n {{ k8s_namespace }} -o jsonpath='{.spec.ports[0].nodePort}'
   register: frontend_nodeport
   changed_when: false
   failed_when: false
@@ -14,7 +14,7 @@
 
 - name: Get Kibana Service NodePort
   shell: |
-    minikube kubectl -- get svc kibana -n {{ k8s_namespace }} -o jsonpath='{.spec.ports[0].nodePort}'
+    kubectl get svc kibana -n {{ k8s_namespace }} -o jsonpath='{.spec.ports[0].nodePort}'
   register: kibana_nodeport
   changed_when: false
   failed_when: false

@@ -19,11 +19,11 @@
 
 - name: Create Docker Hub secret
   shell: |
-    minikube kubectl -- create secret docker-registry dockerhub-secret \
+    kubectl create secret docker-registry dockerhub-secret \
       --docker-server=https://index.docker.io/v1/ \
       --docker-username="{{ docker_username }}" \
       --docker-password="{{ docker_password }}" \
       --namespace="{{ k8s_namespace }}" \
-      --dry-run=client -o yaml | minikube kubectl -- apply -f -
+      --dry-run=client -o yaml | kubectl apply -f -
   when: docker_password != ""
   no_log: true
