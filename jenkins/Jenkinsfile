@@ -189,7 +189,20 @@ pipeline {
                             echo "========================================"
                             echo " Starting fresh Minikube"
                             echo "========================================"
-                            minikube start --driver=docker --wait=all
+
+                            # If minikube is already running, skip start to save time
+                            if minikube status >/dev/null 2>&1; then
+                                echo "Minikube already running — skipping start"
+                            else
+                                # Start without waiting for all components to finish downloading.
+                                # Use a timeout so the pipeline fails fast if start stalls.
+                                echo "Starting minikube (timeout 10m)..."
+                                timeout 10m minikube start --driver=docker --wait=false || {
+                                    echo "minikube start failed or timed out - dumping logs"
+                                    minikube logs || true
+                                    exit 1
+                                }
+                            fi
     
 
                             # Update kubectl config from minikube
