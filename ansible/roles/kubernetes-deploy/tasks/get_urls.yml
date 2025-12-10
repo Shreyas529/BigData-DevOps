@@ -19,10 +19,18 @@
   changed_when: false
   failed_when: false
 
+- name: Get Analytics Dashboard Service NodePort
+  shell: |
+    kubectl get svc analytics-dashboard -n {{ k8s_namespace }} -o jsonpath='{.spec.ports[0].nodePort}'
+  register: analytics_nodeport
+  changed_when: false
+  failed_when: false
+
 - name: Set service URLs
   set_fact:
     frontend_url: "http://{{ minikube_ip.stdout }}:{{ frontend_nodeport.stdout }}"
     kibana_url: "http://{{ minikube_ip.stdout }}:{{ kibana_nodeport.stdout }}"
+    analytics_url: "http://{{ minikube_ip.stdout }}:{{ analytics_nodeport.stdout }}"
   when: minikube_ip.stdout is defined and frontend_nodeport.stdout is defined
 
 - name: Display deployment summary
@@ -32,10 +40,12 @@
       - "  Deployment Complete!"
       - "============================================"
       - "Frontend URL: {{ frontend_url | default('Not available') }}"
+      - "Analytics Dashboard URL: {{ analytics_url | default('Not available') }}"
       - "Kibana URL: {{ kibana_url | default('Not available') }}"
       - ""
       - "Alternative access methods:"
       - "  Port-forward: kubectl port-forward -n {{ k8s_namespace }} svc/frontend 8501:8501"
+      - "  Port-forward: kubectl port-forward -n {{ k8s_namespace }} svc/analytics-dashboard 5003:5003"
       - "  Port-forward: kubectl port-forward -n {{ k8s_namespace }} svc/kibana 5601:5601"
       - ""
       - "Useful Commands:"

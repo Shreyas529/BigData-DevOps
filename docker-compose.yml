@@ -78,6 +78,10 @@ services:
     command: python -u query.py
     environment:
       - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=logindata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +89,28 @@ services:
         condition: service_completed_successfully
       
     networks: ["devops-net"]
+
+  analytics-dashboard:
+    build:
+      context: ./backend
+    container_name: netflix-analytics-dashboard
+    command: python -u analytics_dashboard.py
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=logindata
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pwd
+      - ANALYTICS_PORT=5003
+    ports:
+      - "5003:5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    networks:
+      - devops-net
 
   postgres:
     image: postgres:15

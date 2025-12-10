@@ -186,11 +186,14 @@ pipeline {
                         echo "Updating db-init-job.yaml..."
                         sed -i -E "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[a-zA-Z0-9]+\$|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/db-init-job.yaml
                         
+                        echo "Updating analytics-dashboard-deployment.yaml..."
+                        sed -i -E "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[a-zA-Z0-9]+\$|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/analytics-dashboard-deployment.yaml
+                        
                         echo "Updated manifests with build number: ${BUILD_NUMBER}"
                         
                         # Show what changed
                         echo "=== Verification: Image tags in manifests ==="
-                        grep -n "image:" k8s/backend-deployment.yaml k8s/frontend-deployment.yaml k8s/consumer-deployment.yaml k8s/db-init-job.yaml || true
+                        grep -n "image:" k8s/backend-deployment.yaml k8s/frontend-deployment.yaml k8s/consumer-deployment.yaml k8s/db-init-job.yaml k8s/analytics-dashboard-deployment.yaml || true
                     """
                 }
             }

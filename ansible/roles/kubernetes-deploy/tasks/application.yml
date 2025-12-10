@@ -53,6 +53,24 @@
       status: "True"
     wait_timeout: 300
 
+- name: Deploy Analytics Dashboard
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/analytics-dashboard-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Analytics Dashboard to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=analytics-dashboard
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 300
+
 - name: Deploy HPA
   kubernetes.core.k8s:
     state: present
