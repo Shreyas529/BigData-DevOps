@@ -173,21 +173,18 @@ pipeline {
                         fi
                         
                         # Update image tags in Kubernetes manifests (Linux compatible)
+                        # Match the full tag pattern including any suffix to avoid partial replacements
                         echo "Updating backend-deployment.yaml..."
-                        sed -i "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-latest|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/backend-deployment.yaml
-                        sed -i "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[0-9][0-9]*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/backend-deployment.yaml
+                        sed -i -E "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[a-zA-Z0-9]+\$|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/backend-deployment.yaml
                         
                         echo "Updating frontend-deployment.yaml..."
-                        sed -i "s|image: ${IMAGE_NAME}:${FRONTEND_TAG}-latest|image: ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}|g" k8s/frontend-deployment.yaml
-                        sed -i "s|image: ${IMAGE_NAME}:${FRONTEND_TAG}-[0-9][0-9]*|image: ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}|g" k8s/frontend-deployment.yaml
+                        sed -i -E "s|image: ${IMAGE_NAME}:${FRONTEND_TAG}-[a-zA-Z0-9]+\$|image: ${IMAGE_NAME}:${FRONTEND_TAG}-${BUILD_NUMBER}|g" k8s/frontend-deployment.yaml
                         
                         echo "Updating consumer-deployment.yaml..."
-                        sed -i "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-latest|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/consumer-deployment.yaml
-                        sed -i "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[0-9][0-9]*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/consumer-deployment.yaml
+                        sed -i -E "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[a-zA-Z0-9]+\$|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/consumer-deployment.yaml
                         
                         echo "Updating db-init-job.yaml..."
-                        sed -i "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-latest|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/db-init-job.yaml
-                        sed -i "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[0-9][0-9]*|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/db-init-job.yaml
+                        sed -i -E "s|image: ${IMAGE_NAME}:${BACKEND_TAG}-[a-zA-Z0-9]+\$|image: ${IMAGE_NAME}:${BACKEND_TAG}-${BUILD_NUMBER}|g" k8s/db-init-job.yaml
                         
                         echo "Updated manifests with build number: ${BUILD_NUMBER}"
                         
