@@ -1,0 +1,72 @@
+---
+# Vault deployment and secret initialization
+
+- name: Deploy Vault
+  kubernetes.core.k8s:
+    state: present
+    namespace: "{{ k8s_namespace }}"
+    definition: "{{ lookup('file', k8s_manifests_dir + '/vault-deployment.yaml') | from_yaml_all }}"
+
+- name: Wait for Vault to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: "{{ k8s_namespace }}"
+    label_selectors:
+      - app=vault
+    wait: yes
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 180
+
+- name: Wait for Vault API to be accessible
+  shell: |
+    for i in {1..30}; do
+      if kubectl exec -n {{ k8s_namespace }} deploy/vault -- vault status 2>/dev/null | grep -q "Initialized"; then
+        echo "Vault is ready"
+        exit 0
+      fi
+      echo "Waiting for Vault... attempt $i/30"
+      sleep 2
+    done
+    exit 1
+  register: vault_ready
+  changed_when: false
+
+- name: Initialize Vault secrets
+  shell: |
+    # Enable KV secrets engine if not already enabled
+    kubectl exec -n {{ k8s_namespace }} deploy/vault -- sh -c '
+      export VAULT_ADDR=http://127.0.0.1:8200
+      export VAULT_TOKEN=root-token
+      
+      # Enable KV v2 secrets engine
+      vault secrets enable -path=secret kv-v2 2>/dev/null || true
+      
+      # Store PostgreSQL secrets
+      vault kv put secret/postgres \
+        POSTGRES_DB=logindata \
+        POSTGRES_USER=postgres \
+        POSTGRES_PASSWORD=pwd
+      
+      # Store Kafka secrets
+      vault kv put secret/kafka \
+        KAFKA_BOOTSTRAP_SERVERS=kafka:9092 \
+        KAFKA_TOPIC=login_events
+      
+      # Store Docker Hub secrets (if provided)
+      vault kv put secret/dockerhub \
+        username="{{ docker_username | default('') }}" \
+        password="{{ docker_password | default('') }}"
+      
+      echo "Vault secrets initialized successfully"
+    '
+  register: vault_init
+  changed_when: "'initialized successfully' in vault_init.stdout"
+
+- name: Display Vault status
+  debug:
+    msg:
+      - "Vault is running at http://vault:8200"
+      - "Root Token: root-token (dev mode)"
+      - "Secrets stored: secret/postgres, secret/kafka, secret/dockerhub"

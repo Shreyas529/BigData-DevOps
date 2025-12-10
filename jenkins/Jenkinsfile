@@ -58,17 +58,17 @@ pipeline {
             }
         }
 
-        // stage('Run Tests') {
-        //     steps {
-        //         script {
-        //             sh '''
-        //                 docker-compose -f docker-compose.test.yml \
-        //                     -p test \
-        //                     up --build --abort-on-container-exit --exit-code-from test_runner
-        //             '''
-        //         }
-        //     }
-        // }
+        stage('Run Tests') {
+            steps {
+                script {
+                    sh '''
+                        docker-compose -f docker-compose.test.yml \
+                            -p test \
+                            up --build --abort-on-container-exit --exit-code-from test_runner
+                    '''
+                }
+            }
+        }
 
         stage('Build Images') {
             steps {
