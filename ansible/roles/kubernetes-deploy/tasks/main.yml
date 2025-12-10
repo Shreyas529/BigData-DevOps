@@ -2,6 +2,9 @@
 - name: Setup prerequisites
   include_tasks: prerequisites.yml
 
+- name: Deploy Vault for secrets management
+  include_tasks: vault.yml
+
 - name: Deploy configuration
   include_tasks: config.yml
 
