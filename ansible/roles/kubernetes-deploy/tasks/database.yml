@@ -62,11 +62,39 @@
 
 - name: Wait for DB Init Job to complete
   shell: |
+    # First check if job already completed
+    COMPLETE=$(kubectl get job db-init -n {{ k8s_namespace }} -o jsonpath='{.status.succeeded}' 2>/dev/null)
+    if [ "$COMPLETE" = "1" ]; then
+      echo "Job already completed successfully"
+      exit 0
+    fi
+    
+    # Check if job failed
+    FAILED=$(kubectl get job db-init -n {{ k8s_namespace }} -o jsonpath='{.status.failed}' 2>/dev/null)
+    if [ ! -z "$FAILED" ] && [ "$FAILED" -ge "1" ]; then
+      echo "Job failed!"
+      kubectl logs -n {{ k8s_namespace }} -l app=db-init --tail=50
+      exit 1
+    fi
+    
+    # Wait for job to complete
     kubectl wait --for=condition=complete job/db-init -n {{ k8s_namespace }} --timeout=300s
   register: db_init_result
   retries: 3
   delay: 15
   until: db_init_result.rc == 0
+
+- name: Show DB Init Job logs
+  shell: |
+    kubectl logs -n {{ k8s_namespace }} -l app=db-init --tail=20
+  register: job_logs
+  changed_when: false
+  ignore_errors: true
+
+- name: Display DB Init Job logs
+  debug:
+    msg: "{{ job_logs.stdout_lines }}"
+  when: job_logs.stdout_lines is defined
 
 - name: Check DB Init Job status
   shell: |
