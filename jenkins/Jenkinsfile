@@ -384,12 +384,21 @@ pipeline {
                         echo "========================================"
                         echo "🔗 Service URLs"
                         echo "========================================"
-                        echo "Frontend URL:"
-                        minikube service frontend -n bigdata-devops --url || echo "⚠️  Frontend service not ready"
+                        
+                        # Get Minikube IP
+                        MINIKUBE_IP=$(minikube ip)
+                        
+                        # Get NodePorts
+                        FRONTEND_PORT=$(kubectl get svc frontend -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}')
+                        KIBANA_PORT=$(kubectl get svc kibana -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}')
+                        
+                        echo "Frontend URL: http://${MINIKUBE_IP}:${FRONTEND_PORT}"
+                        echo "Kibana URL: http://${MINIKUBE_IP}:${KIBANA_PORT}"
                         
                         echo ""
-                        echo "Kibana URL:"
-                        minikube service kibana -n bigdata-devops --url || echo "⚠️  Kibana service not ready"
+                        echo "Alternative access (port-forward):"
+                        echo "  kubectl port-forward -n bigdata-devops svc/frontend 8501:8501"
+                        echo "  kubectl port-forward -n bigdata-devops svc/kibana 5601:5601"
                         
                         echo ""
                         echo "========================================"
