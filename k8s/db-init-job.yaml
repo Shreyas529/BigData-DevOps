@@ -14,6 +14,8 @@ spec:
         app: db-init
     spec:
       restartPolicy: OnFailure
+      imagePullSecrets:
+      - name: dockerhub-secret
       initContainers:
       - name: wait-for-postgres
         image: busybox:1.35
@@ -21,7 +23,7 @@ spec:
       containers:
       - name: db-init
         image: siddharth194/bigdata-devops:backend-latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command: ["python", "-u", "db_init.py"]
         env:
         - name: POSTGRES_HOST
