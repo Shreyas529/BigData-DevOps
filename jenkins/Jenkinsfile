@@ -189,16 +189,8 @@ pipeline {
                             echo "========================================"
                             echo " Starting fresh Minikube"
                             echo "========================================"
-                            minikube start \
-                              --driver=docker \
-                              --memory=8192 \
-                              --cpus=4 \
-                              --addons=default-storageclass,metrics-server \
-                              --kubernetes-version=v1.28.3 || {
-                                echo "Failed to start Minikube. Please ensure Minikube is available."
-                                minikube status || true
-                                exit 1
-                              }
+                            minikube start --driver=docker --wait=all
+    
 
                             # Update kubectl config from minikube
                             echo "Configuring kubectl..."
