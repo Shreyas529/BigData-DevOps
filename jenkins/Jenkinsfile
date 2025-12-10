@@ -433,11 +433,23 @@ pipeline {
                     echo "🌐 Access your application:"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                     
-                    FRONTEND_URL=$(minikube service frontend -n bigdata-devops --url 2>/dev/null || echo 'Not available')
-                    KIBANA_URL=$(minikube service kibana -n bigdata-devops --url 2>/dev/null || echo 'Not available')
+                    # Get Minikube IP and NodePorts
+                    MINIKUBE_IP=$(minikube ip 2>/dev/null || echo 'Not available')
+                    FRONTEND_PORT=$(kubectl get svc frontend -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo 'N/A')
+                    KIBANA_PORT=$(kubectl get svc kibana -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo 'N/A')
                     
-                    echo "📊 Frontend: ${FRONTEND_URL}"
-                    echo "📈 Kibana:   ${KIBANA_URL}"
+                    if [ "$MINIKUBE_IP" != "Not available" ] && [ "$FRONTEND_PORT" != "N/A" ]; then
+                        echo "📊 Frontend: http://${MINIKUBE_IP}:${FRONTEND_PORT}"
+                    else
+                        echo "📊 Frontend: Not available"
+                    fi
+                    
+                    if [ "$MINIKUBE_IP" != "Not available" ] && [ "$KIBANA_PORT" != "N/A" ]; then
+                        echo "📈 Kibana:   http://${MINIKUBE_IP}:${KIBANA_PORT}"
+                    else
+                        echo "📈 Kibana:   Not available"
+                    fi
+                    
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                     
                     # Show pod status
