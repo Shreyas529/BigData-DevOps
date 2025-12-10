@@ -9,7 +9,7 @@ pipeline {
     }
     
     environment {
-        DOCKER_HUB_CREDENTIALS = 'dockerhub-creds'
+        DOCKER_HUB_CREDENTIALS = 'dockerhub-credentials'
         IMAGE_NAME = 'siddharth194/bigdata-devops'
         BACKEND_TAG = 'backend'
         FRONTEND_TAG = 'frontend'
