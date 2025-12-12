@@ -390,14 +390,19 @@ pipeline {
                         # Get NodePorts
                         FRONTEND_PORT=$(kubectl get svc frontend -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}')
                         KIBANA_PORT=$(kubectl get svc kibana -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}')
+                        ANALYTICS_PORT=$(kubectl get svc analytics-dashboard -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo 'N/A')
                         
                         echo "Frontend URL: http://${MINIKUBE_IP}:${FRONTEND_PORT}"
                         echo "Kibana URL: http://${MINIKUBE_IP}:${KIBANA_PORT}"
+                        if [ "$ANALYTICS_PORT" != "N/A" ]; then
+                            echo "Analytics Dashboard URL: http://${MINIKUBE_IP}:${ANALYTICS_PORT}"
+                        fi
                         
                         echo ""
                         echo "Alternative access (port-forward):"
                         echo "  kubectl port-forward -n bigdata-devops svc/frontend 8501:8501"
                         echo "  kubectl port-forward -n bigdata-devops svc/kibana 5601:5601"
+                        echo "  kubectl port-forward -n bigdata-devops svc/analytics-dashboard 5000:5000"
                         
                         echo ""
                         echo "========================================"
@@ -436,17 +441,24 @@ pipeline {
                     MINIKUBE_IP=$(minikube ip 2>/dev/null || echo 'Not available')
                     FRONTEND_PORT=$(kubectl get svc frontend -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo 'N/A')
                     KIBANA_PORT=$(kubectl get svc kibana -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo 'N/A')
+                    ANALYTICS_PORT=$(kubectl get svc analytics-dashboard -n bigdata-devops -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo 'N/A')
                     
                     if [ "$MINIKUBE_IP" != "Not available" ] && [ "$FRONTEND_PORT" != "N/A" ]; then
-                        echo "📊 Frontend: http://${MINIKUBE_IP}:${FRONTEND_PORT}"
+                        echo "📊 Frontend:  http://${MINIKUBE_IP}:${FRONTEND_PORT}"
                     else
-                        echo "📊 Frontend: Not available"
+                        echo "📊 Frontend:  Not available"
                     fi
                     
                     if [ "$MINIKUBE_IP" != "Not available" ] && [ "$KIBANA_PORT" != "N/A" ]; then
-                        echo "📈 Kibana:   http://${MINIKUBE_IP}:${KIBANA_PORT}"
+                        echo "📈 Kibana:    http://${MINIKUBE_IP}:${KIBANA_PORT}"
                     else
-                        echo "📈 Kibana:   Not available"
+                        echo "📈 Kibana:    Not available"
+                    fi
+                    
+                    if [ "$MINIKUBE_IP" != "Not available" ] && [ "$ANALYTICS_PORT" != "N/A" ]; then
+                        echo "📉 Analytics: http://${MINIKUBE_IP}:${ANALYTICS_PORT}"
+                    else
+                        echo "📉 Analytics: Not available"
                     fi
                     
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

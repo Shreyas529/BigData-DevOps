@@ -30,7 +30,7 @@ def send_login_event(username: str, region: str, status: str):
 
 def login_page():
     """Display the login page"""
-    st.title("Login vishruth annaow")
+    st.title("Login")
     st.markdown("---")
     
     with st.form("login_form"):
